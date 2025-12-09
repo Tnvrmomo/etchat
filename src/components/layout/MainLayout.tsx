@@ -4,6 +4,7 @@ import { CreateButton } from './CreateButton';
 import { HomeView } from '@/components/views/HomeView';
 import { SpacesView } from '@/components/views/SpacesView';
 import { ProfileView } from '@/components/views/ProfileView';
+import { SocialDiscoveryView } from '@/components/views/SocialDiscoveryView';
 import { toast } from 'sonner';
 
 interface MainLayoutProps {
@@ -13,7 +14,7 @@ interface MainLayoutProps {
 }
 
 export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutProps) => {
-  const [activeNav, setActiveNav] = useState<'home' | 'spaces' | 'you'>('home');
+  const [activeNav, setActiveNav] = useState<'home' | 'spaces' | 'discover' | 'you'>('home');
 
   const handleCreate = (type: 'thread' | 'reel' | 'canvas' | 'space') => {
     const messages = {
@@ -40,6 +41,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       <main className="relative z-10 pb-32 pt-6">
         {activeNav === 'home' && <HomeView />}
         {activeNav === 'spaces' && <SpacesView />}
+        {activeNav === 'discover' && <SocialDiscoveryView userInterests={userInterests} />}
         {activeNav === 'you' && (
           <ProfileView 
             name={userName} 

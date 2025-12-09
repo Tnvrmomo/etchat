@@ -1,7 +1,7 @@
-import { Home, Users, User } from 'lucide-react';
+import { Home, Users, User, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type NavItem = 'home' | 'spaces' | 'you';
+type NavItem = 'home' | 'spaces' | 'discover' | 'you';
 
 interface BottomNavProps {
   active: NavItem;
@@ -12,6 +12,7 @@ export const BottomNav = ({ active, onNavigate }: BottomNavProps) => {
   const items = [
     { id: 'home' as const, icon: Home, label: 'Home' },
     { id: 'spaces' as const, icon: Users, label: 'Spaces' },
+    { id: 'discover' as const, icon: Sparkles, label: 'Discover' },
     { id: 'you' as const, icon: User, label: 'You' },
   ];
 
