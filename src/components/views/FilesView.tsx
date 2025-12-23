@@ -1,35 +1,22 @@
 import { useState } from 'react';
-import { FileText, Image, Video, Music, File, Download, Trash2, Search, Upload } from 'lucide-react';
+import { FileText, Image, Video, Music, File, Download, Trash2, Search, Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-
-interface SharedFile {
-  id: string;
-  name: string;
-  type: 'image' | 'video' | 'audio' | 'document' | 'other';
-  size: number;
-  sharedBy: string;
-  sharedIn: string;
-  timestamp: Date;
-  url: string;
-}
-
-const demoFiles: SharedFile[] = [
-  { id: '1', name: 'Project_Proposal.pdf', type: 'document', size: 2400000, sharedBy: 'Alex Chen', sharedIn: 'Team Chat', timestamp: new Date(Date.now() - 1000 * 60 * 60), url: '#' },
-  { id: '2', name: 'meeting_screenshot.png', type: 'image', size: 850000, sharedBy: 'Sarah Wilson', sharedIn: 'Marketing Group', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3), url: '#' },
-  { id: '3', name: 'presentation.mp4', type: 'video', size: 15000000, sharedBy: 'Jordan Lee', sharedIn: 'Team Chat', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), url: '#' },
-  { id: '4', name: 'voice_memo.mp3', type: 'audio', size: 320000, sharedBy: 'You', sharedIn: 'Alex Chen', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48), url: '#' },
-  { id: '5', name: 'design_assets.zip', type: 'other', size: 45000000, sharedBy: 'Sarah Wilson', sharedIn: 'Design Team', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72), url: '#' },
-];
+import { useSharedFiles, SharedFile } from '@/hooks/useSharedFiles';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 export const FilesView = () => {
+  const { user } = useAuth();
+  const { files, isLoading, uploadFile, deleteFile, downloadFile } = useSharedFiles();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | SharedFile['type']>('all');
+  const [filter, setFilter] = useState<'all' | SharedFile['file_type']>('all');
+  const [isUploading, setIsUploading] = useState(false);
 
-  const filteredFiles = demoFiles.filter(file => {
+  const filteredFiles = files.filter(file => {
     const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filter === 'all' || file.type === filter;
+    const matchesFilter = filter === 'all' || file.file_type === filter;
     return matchesSearch && matchesFilter;
   });
 
@@ -40,7 +27,8 @@ export const FilesView = () => {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -51,7 +39,7 @@ export const FilesView = () => {
     return date.toLocaleDateString();
   };
 
-  const getFileIcon = (type: SharedFile['type']) => {
+  const getFileIcon = (type: SharedFile['file_type']) => {
     switch (type) {
       case 'image': return <Image className="w-5 h-5 text-accent" />;
       case 'video': return <Video className="w-5 h-5 text-destructive" />;
@@ -61,13 +49,48 @@ export const FilesView = () => {
     }
   };
 
-  const filters: { id: 'all' | SharedFile['type']; label: string }[] = [
+  const filters: { id: 'all' | SharedFile['file_type']; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'image', label: 'Images' },
     { id: 'video', label: 'Videos' },
     { id: 'document', label: 'Docs' },
     { id: 'audio', label: 'Audio' },
   ];
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      for (const file of selectedFiles) {
+        if (file.size > 50 * 1024 * 1024) {
+          toast.error(`${file.name} is too large. Max size is 50MB`);
+          continue;
+        }
+        await uploadFile(file);
+      }
+      toast.success('Files uploaded successfully');
+    } catch (error) {
+      toast.error('Failed to upload some files');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (file: SharedFile) => {
+    if (file.uploaded_by !== user?.id) {
+      toast.error('You can only delete your own files');
+      return;
+    }
+    
+    await deleteFile(file.id, file.storage_path);
+    toast.success('File deleted');
+  };
+
+  const handleDownload = (file: SharedFile) => {
+    downloadFile(file.public_url, file.name);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -102,7 +125,11 @@ export const FilesView = () => {
 
       {/* Files list */}
       <div className="flex-1 overflow-auto">
-        {filteredFiles.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : filteredFiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <FileText className="w-12 h-12 mb-4 opacity-50" />
             <p className="font-display">No files found</p>
@@ -115,9 +142,17 @@ export const FilesView = () => {
                 key={file.id}
                 className="flex items-center gap-4 px-4 py-4 hover:bg-muted/30 transition-colors"
               >
-                {/* File icon */}
-                <div className="w-12 h-12 rounded-organic bg-muted flex items-center justify-center">
-                  {getFileIcon(file.type)}
+                {/* File icon or preview */}
+                <div className="w-12 h-12 rounded-organic bg-muted flex items-center justify-center overflow-hidden">
+                  {file.file_type === 'image' ? (
+                    <img 
+                      src={file.public_url} 
+                      alt={file.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    getFileIcon(file.file_type)
+                  )}
                 </div>
 
                 {/* File info */}
@@ -125,17 +160,39 @@ export const FilesView = () => {
                   <p className="font-display font-medium truncate">{file.name}</p>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <span>{formatSize(file.size)}</span>
+                    {file.conversation_name && (
+                      <>
+                        <span>•</span>
+                        <span className="truncate">{file.conversation_name}</span>
+                      </>
+                    )}
                     <span>•</span>
-                    <span>{file.sharedIn}</span>
-                    <span>•</span>
-                    <span>{formatTime(file.timestamp)}</span>
+                    <span>{formatTime(file.created_at)}</span>
                   </div>
+                  <p className="text-xs text-muted-foreground">by {file.uploader_name}</p>
                 </div>
 
                 {/* Actions */}
-                <Button variant="ghost" size="icon" className="text-muted-foreground">
-                  <Download className="w-5 h-5" />
-                </Button>
+                <div className="flex gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-muted-foreground"
+                    onClick={() => handleDownload(file)}
+                  >
+                    <Download className="w-5 h-5" />
+                  </Button>
+                  {file.uploaded_by === user?.id && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-destructive"
+                      onClick={() => handleDelete(file)}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -144,12 +201,30 @@ export const FilesView = () => {
 
       {/* Upload FAB */}
       <div className="fixed bottom-24 right-4">
-        <Button
-          size="lg"
-          className="rounded-full w-14 h-14 shadow-warm"
-        >
-          <Upload className="w-6 h-6" />
-        </Button>
+        <input
+          type="file"
+          id="file-upload"
+          multiple
+          className="hidden"
+          onChange={handleFileUpload}
+          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
+        />
+        <label htmlFor="file-upload">
+          <Button
+            size="lg"
+            className="rounded-full w-14 h-14 shadow-warm"
+            disabled={isUploading}
+            asChild
+          >
+            <span>
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <Upload className="w-6 h-6" />
+              )}
+            </span>
+          </Button>
+        </label>
       </div>
     </div>
   );

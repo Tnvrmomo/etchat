@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServerSettings } from '@/components/settings/ServerSettings';
 import { useServerStatus } from '@/hooks/useServerStatus';
+import { useUserStats } from '@/hooks/useUserStats';
 
 interface ProfileViewProps {
   name: string;
@@ -28,6 +29,7 @@ type SettingsView = 'main' | 'server';
 export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
   const { signOut, profile } = useAuth();
   const { isOnline, emergencyConfig } = useServerStatus();
+  const { stats } = useUserStats();
   const [currentView, setCurrentView] = useState<SettingsView>('main');
   const [darkMode, setDarkMode] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -114,15 +116,15 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
         
         <div className="flex justify-center gap-8 mt-6 pt-4 border-t border-border">
           <div className="text-center">
-            <p className="font-display text-xl font-bold text-foreground">12</p>
+            <p className="font-display text-xl font-bold text-foreground">{stats.totalChats}</p>
             <p className="text-xs text-muted-foreground">Chats</p>
           </div>
           <div className="text-center">
-            <p className="font-display text-xl font-bold text-foreground">48</p>
+            <p className="font-display text-xl font-bold text-foreground">{stats.totalCalls}</p>
             <p className="text-xs text-muted-foreground">Calls</p>
           </div>
           <div className="text-center">
-            <p className="font-display text-xl font-bold text-foreground">23</p>
+            <p className="font-display text-xl font-bold text-foreground">{stats.totalFiles}</p>
             <p className="text-xs text-muted-foreground">Files</p>
           </div>
         </div>

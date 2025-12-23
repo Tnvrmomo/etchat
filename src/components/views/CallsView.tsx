@@ -3,8 +3,13 @@ import { Phone, Video, PhoneIncoming, PhoneMissed, PhoneOutgoing, Loader2 } from
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useCallHistory, CallRecord } from '@/hooks/useCallHistory';
+import { toast } from 'sonner';
 
-export const CallsView = () => {
+interface CallsViewProps {
+  onStartCall?: (userId: string, userName: string, avatar: string | undefined, callType: 'voice' | 'video') => void;
+}
+
+export const CallsView = ({ onStartCall }: CallsViewProps) => {
   const { calls, isLoading } = useCallHistory();
   const [filter, setFilter] = useState<'all' | 'missed'>('all');
 
@@ -36,6 +41,19 @@ export const CallsView = () => {
       case 'outgoing': return <PhoneOutgoing className="w-4 h-4 text-primary" />;
       case 'missed': return <PhoneMissed className="w-4 h-4 text-destructive" />;
     }
+  };
+
+  const handleCallBack = (call: CallRecord) => {
+    if (!onStartCall) {
+      toast.error('Calling is not available at the moment');
+      return;
+    }
+
+    const userName = call.caller_profile?.display_name || 'Unknown';
+    const avatar = call.caller_profile?.avatar_url || undefined;
+    
+    onStartCall(call.caller_id, userName, avatar, call.call_type);
+    toast.info(`Calling ${userName}...`);
   };
 
   return (
@@ -80,6 +98,7 @@ export const CallsView = () => {
               <div
                 key={call.id}
                 className="flex items-center gap-4 px-4 py-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                onClick={() => handleCallBack(call)}
               >
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-2xl">
@@ -114,6 +133,10 @@ export const CallsView = () => {
                   variant="ghost"
                   size="icon"
                   className="text-primary hover:bg-primary/10"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCallBack(call);
+                  }}
                 >
                   {call.call_type === 'video' ? (
                     <Video className="w-5 h-5" />

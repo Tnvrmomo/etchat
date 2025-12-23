@@ -1,17 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, Phone, Video, UserPlus, Loader2 } from 'lucide-react';
+import { Search, Phone, UserPlus, Loader2 } from 'lucide-react';
 import { ConversationList } from '@/components/messaging/ConversationList';
 import { ChatView } from '@/components/messaging/ChatView';
 import { GroupChat } from '@/components/messaging/GroupChat';
-import { VoiceCallScreen } from '@/components/calling/VoiceCallScreen';
-import { VideoCallScreen } from '@/components/calling/VideoCallScreen';
-import { IncomingCallModal } from '@/components/calling/IncomingCallModal';
-import { useWebRTC } from '@/hooks/useWebRTC';
 import { useToast } from '@/hooks/use-toast';
-import { useConversations, Conversation } from '@/hooks/useConversations';
-import { useCallHistory } from '@/hooks/useCallHistory';
+import { useConversations } from '@/hooks/useConversations';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -22,39 +17,20 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
-export const ChatsView = () => {
+interface ChatsViewProps {
+  onStartCall?: (targetUserId: string, targetName: string, targetAvatar: string | undefined, callType: 'voice' | 'video') => void;
+}
+
+export const ChatsView = ({ onStartCall }: ChatsViewProps) => {
   const { user } = useAuth();
   const { conversations, isLoading, createConversation } = useConversations();
-  const { createCall, updateCallStatus } = useCallHistory();
   const { getOtherProfiles } = useProfiles();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
-  const [callType, setCallType] = useState<'voice' | 'video' | null>(null);
-  const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
-  const [incomingCall, setIncomingCall] = useState<{
-    callerName: string;
-    callType: 'voice' | 'video';
-  } | null>(null);
 
   const { toast } = useToast();
-
-  const {
-    callState,
-    localStream,
-    remoteStream,
-    isMuted,
-    isVideoOff,
-    isScreenSharing,
-    startCall,
-    endCall,
-    toggleMute,
-    toggleVideo,
-    toggleCamera,
-    startScreenShare,
-    stopScreenShare,
-  } = useWebRTC();
 
   // Transform conversations for the list component
   const transformedConversations = conversations.map(conv => {
@@ -76,98 +52,46 @@ export const ChatsView = () => {
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleStartVoiceCall = async () => {
-    if (!selectedConversation || !user) return;
+  const handleStartVoiceCall = () => {
+    if (!selectedConversation || !user || !onStartCall) return;
     
-    try {
-      setCallType('voice');
-      await startCall('voice');
-      
-      // Create call in database
-      const participantIds = selectedConversation.participants?.map((p: any) => p.user_id) || [];
-      const call = await createCall(participantIds, 'voice', selectedConversation.id);
-      if (call) setCurrentCallId(call.id);
-      
+    const otherParticipant = selectedConversation.participants?.[0];
+    if (!otherParticipant) {
       toast({
-        title: 'Calling...',
-        description: `Calling ${selectedConversation.name || 'Unknown'}`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Call failed',
-        description: 'Could not start voice call. Please check microphone permissions.',
+        title: 'Cannot start call',
+        description: 'No participant found',
         variant: 'destructive',
       });
-      setCallType(null);
+      return;
     }
+    
+    onStartCall(
+      otherParticipant.user_id,
+      otherParticipant.display_name || 'Unknown',
+      otherParticipant.avatar_url || undefined,
+      'voice'
+    );
   };
 
-  const handleStartVideoCall = async () => {
-    if (!selectedConversation || !user) return;
+  const handleStartVideoCall = () => {
+    if (!selectedConversation || !user || !onStartCall) return;
     
-    try {
-      setCallType('video');
-      await startCall('video');
-      
-      // Create call in database
-      const participantIds = selectedConversation.participants?.map((p: any) => p.user_id) || [];
-      const call = await createCall(participantIds, 'video', selectedConversation.id);
-      if (call) setCurrentCallId(call.id);
-      
+    const otherParticipant = selectedConversation.participants?.[0];
+    if (!otherParticipant) {
       toast({
-        title: 'Video call starting...',
-        description: `Calling ${selectedConversation.name || 'Unknown'}`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Call failed',
-        description: 'Could not start video call. Please check camera permissions.',
+        title: 'Cannot start call',
+        description: 'No participant found',
         variant: 'destructive',
       });
-      setCallType(null);
+      return;
     }
-  };
-
-  const handleEndCall = async () => {
-    endCall();
-    if (currentCallId) {
-      await updateCallStatus(currentCallId, 'ended');
-    }
-    setCallType(null);
-    setCurrentCallId(null);
-    toast({
-      title: 'Call ended',
-    });
-  };
-
-  const handleAcceptIncomingCall = async () => {
-    if (!incomingCall) return;
     
-    try {
-      setCallType(incomingCall.callType);
-      await startCall(incomingCall.callType);
-      setIncomingCall(null);
-    } catch (error) {
-      toast({
-        title: 'Failed to answer',
-        description: 'Could not answer the call',
-        variant: 'destructive',
-      });
-      setIncomingCall(null);
-    }
-  };
-
-  const handleRejectIncomingCall = () => {
-    setIncomingCall(null);
-    toast({ title: 'Call declined' });
-  };
-
-  const handleToggleScreenShare = async () => {
-    if (isScreenSharing) {
-      await stopScreenShare();
-    } else {
-      await startScreenShare();
-    }
+    onStartCall(
+      otherParticipant.user_id,
+      otherParticipant.display_name || 'Unknown',
+      otherParticipant.avatar_url || undefined,
+      'video'
+    );
   };
 
   const handleCreateConversation = async (userId: string, displayName: string) => {
@@ -182,55 +106,6 @@ export const ChatsView = () => {
     const fullConv = conversations.find(c => c.id === conv.id);
     setSelectedConversation(fullConv || conv);
   };
-
-  // Show incoming call modal
-  if (incomingCall) {
-    return (
-      <IncomingCallModal
-        callerName={incomingCall.callerName}
-        callType={incomingCall.callType}
-        onAccept={handleAcceptIncomingCall}
-        onReject={handleRejectIncomingCall}
-      />
-    );
-  }
-
-  // Show active call screen
-  if (callType && callState !== 'idle' && callState !== 'ended') {
-    const callerName = selectedConversation?.name || 
-      selectedConversation?.participants?.[0]?.display_name || 
-      'Unknown';
-
-    if (callType === 'voice') {
-      return (
-        <VoiceCallScreen
-          callerName={callerName}
-          callState={callState}
-          isMuted={isMuted}
-          remoteStream={remoteStream}
-          onToggleMute={toggleMute}
-          onEndCall={handleEndCall}
-        />
-      );
-    }
-
-    return (
-      <VideoCallScreen
-        callerName={callerName}
-        callState={callState}
-        localStream={localStream}
-        remoteStream={remoteStream}
-        isMuted={isMuted}
-        isVideoOff={isVideoOff}
-        isScreenSharing={isScreenSharing}
-        onToggleMute={toggleMute}
-        onToggleVideo={toggleVideo}
-        onToggleCamera={toggleCamera}
-        onToggleScreenShare={handleToggleScreenShare}
-        onEndCall={handleEndCall}
-      />
-    );
-  }
 
   // Show chat view when conversation selected
   if (selectedConversation) {

@@ -34,6 +34,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
     isMuted,
     isVideoOff,
     isScreenSharing,
+    startCall,
     acceptCall,
     rejectCall,
     endCall,
@@ -43,6 +44,15 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
     startScreenShare,
     stopScreenShare,
   } = useCallManager(user?.id || null);
+
+  const handleStartCall = (
+    targetUserId: string,
+    targetName: string,
+    targetAvatar: string | undefined,
+    callType: 'voice' | 'video'
+  ) => {
+    startCall(targetUserId, targetName, targetAvatar, callType);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,8 +120,8 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
 
       {/* Main content area */}
       <main className="relative z-10 pb-24">
-        {activeNav === 'chats' && <ChatsView />}
-        {activeNav === 'calls' && <CallsView />}
+        {activeNav === 'chats' && <ChatsView onStartCall={handleStartCall} />}
+        {activeNav === 'calls' && <CallsView onStartCall={handleStartCall} />}
         {activeNav === 'files' && <FilesView />}
         {activeNav === 'profile' && (
           <ProfileView 
