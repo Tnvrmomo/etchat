@@ -1,16 +1,18 @@
-import { Home, Users, User, Sparkles } from 'lucide-react';
+import { Home, Users, User, Sparkles, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type NavItem = 'home' | 'spaces' | 'discover' | 'you';
+type NavItem = 'home' | 'chats' | 'spaces' | 'discover' | 'you';
 
 interface BottomNavProps {
   active: NavItem;
   onNavigate: (item: NavItem) => void;
+  unreadCount?: number;
 }
 
-export const BottomNav = ({ active, onNavigate }: BottomNavProps) => {
+export const BottomNav = ({ active, onNavigate, unreadCount = 0 }: BottomNavProps) => {
   const items = [
     { id: 'home' as const, icon: Home, label: 'Home' },
+    { id: 'chats' as const, icon: MessageCircle, label: 'Chats', badge: unreadCount },
     { id: 'spaces' as const, icon: Users, label: 'Spaces' },
     { id: 'discover' as const, icon: Sparkles, label: 'Discover' },
     { id: 'you' as const, icon: User, label: 'You' },
@@ -28,20 +30,25 @@ export const BottomNav = ({ active, onNavigate }: BottomNavProps) => {
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                'flex flex-col items-center gap-1 px-6 py-2 rounded-organic transition-all duration-300',
+                'flex flex-col items-center gap-1 px-4 py-2 rounded-organic transition-all duration-300',
                 isActive 
                   ? 'text-primary' 
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <div className={cn(
-                'p-2 rounded-organic transition-all duration-300',
+                'p-2 rounded-organic transition-all duration-300 relative',
                 isActive && 'bg-primary/10 animate-scale-in'
               )}>
                 <Icon className={cn(
-                  'w-6 h-6 transition-transform duration-300',
+                  'w-5 h-5 transition-transform duration-300',
                   isActive && 'scale-110'
                 )} />
+                {'badge' in item && item.badge && item.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-bold rounded-full flex items-center justify-center">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
               </div>
               <span className="text-xs font-display font-medium">{item.label}</span>
             </button>
