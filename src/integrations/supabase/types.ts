@@ -381,6 +381,60 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_files: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          file_type: string
+          id: string
+          message_id: string | null
+          name: string
+          public_url: string
+          size: number
+          storage_path: string
+          uploaded_by: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          file_type: string
+          id?: string
+          message_id?: string | null
+          name: string
+          public_url: string
+          size: number
+          storage_path: string
+          uploaded_by: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          file_type?: string
+          id?: string
+          message_id?: string | null
+          name?: string
+          public_url?: string
+          size?: number
+          storage_path?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_files_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_files_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
