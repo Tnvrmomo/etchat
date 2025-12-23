@@ -4,6 +4,13 @@ import { ProfileView } from '@/components/views/ProfileView';
 import { ChatsView } from '@/components/views/ChatsView';
 import { CallsView } from '@/components/views/CallsView';
 import { FilesView } from '@/components/views/FilesView';
+import { IncomingCallModal } from '@/components/calling/IncomingCallModal';
+import { VideoCallScreen } from '@/components/calling/VideoCallScreen';
+import { VoiceCallScreen } from '@/components/calling/VoiceCallScreen';
+import { useCallManager } from '@/hooks/useCallManager';
+import { useAuth } from '@/contexts/AuthContext';
+import { ConnectionStatus } from '@/components/status/ConnectionStatus';
+import { CallState } from '@/utils/webrtc/RTCManager';
 
 interface MainLayoutProps {
   userName: string;
@@ -15,9 +22,73 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
   const [activeNav, setActiveNav] = useState<'chats' | 'calls' | 'files' | 'profile'>('chats');
   const [unreadCount] = useState(3);
   const [missedCalls] = useState(1);
+  
+  const { user } = useAuth();
+  const {
+    activeCall,
+    incomingCall,
+    isInCall,
+    localStream,
+    remoteStream,
+    callState,
+    isMuted,
+    isVideoOff,
+    isScreenSharing,
+    acceptCall,
+    rejectCall,
+    endCall,
+    toggleMute,
+    toggleVideo,
+    toggleCamera,
+    startScreenShare,
+    stopScreenShare,
+  } = useCallManager(user?.id || null);
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Incoming Call Modal */}
+      {incomingCall && (
+        <IncomingCallModal
+          callerName={incomingCall.callerName}
+          callerAvatar={incomingCall.callerAvatar}
+          callType={incomingCall.callType}
+          onAccept={acceptCall}
+          onReject={rejectCall}
+        />
+      )}
+
+      {/* Active Video Call */}
+      {isInCall && activeCall?.callType === 'video' && (
+        <VideoCallScreen
+          callerName={activeCall.callerName}
+          callerAvatar={activeCall.callerAvatar}
+          callState={callState as CallState}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          isMuted={isMuted}
+          isVideoOff={isVideoOff}
+          isScreenSharing={isScreenSharing}
+          onToggleMute={toggleMute}
+          onToggleVideo={toggleVideo}
+          onToggleCamera={toggleCamera}
+          onToggleScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
+          onEndCall={endCall}
+        />
+      )}
+
+      {/* Active Voice Call */}
+      {isInCall && activeCall?.callType === 'voice' && (
+        <VoiceCallScreen
+          callerName={activeCall.callerName}
+          callerAvatar={activeCall.callerAvatar}
+          callState={callState as CallState}
+          isMuted={isMuted}
+          onToggleMute={toggleMute}
+          onEndCall={endCall}
+          remoteStream={remoteStream}
+        />
+      )}
+
       {/* Soft background orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-64 h-64 rounded-full bg-primary/5 blur-3xl animate-float" />
@@ -33,6 +104,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
             </div>
             <h1 className="font-display text-xl font-bold text-foreground">eT chat</h1>
           </div>
+          <ConnectionStatus compact />
         </div>
       </header>
 
