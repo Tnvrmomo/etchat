@@ -1,56 +1,31 @@
-import { useState } from 'react';
-import { HeroSection } from '@/components/landing/HeroSection';
-import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
+import { useState, useEffect } from 'react';
+import { AccessCodeGate } from '@/components/auth/AccessCodeGate';
 import { MainLayout } from '@/components/layout/MainLayout';
 
-type AppState = 'landing' | 'onboarding' | 'app';
-
-interface UserData {
-  mood: string;
-  interests: string[];
-  name: string;
-  avatar: string;
-}
-
 const Index = () => {
-  const [appState, setAppState] = useState<AppState>('landing');
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const handleGetStarted = () => {
-    setAppState('onboarding');
+  useEffect(() => {
+    // Check if already authenticated
+    const accessGranted = localStorage.getItem('et-chat-access');
+    if (accessGranted === 'granted') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleAccessGranted = () => {
+    setIsAuthenticated(true);
   };
 
-  const handleOnboardingComplete = (data: UserData) => {
-    setUserData(data);
-    setAppState('app');
-  };
-
-  const handleBackToLanding = () => {
-    setAppState('landing');
-  };
-
-  if (appState === 'landing') {
-    return (
-      <div className="bg-atmosphere min-h-screen">
-        <HeroSection onGetStarted={handleGetStarted} />
-      </div>
-    );
-  }
-
-  if (appState === 'onboarding') {
-    return (
-      <OnboardingFlow 
-        onComplete={handleOnboardingComplete}
-        onBack={handleBackToLanding}
-      />
-    );
+  if (!isAuthenticated) {
+    return <AccessCodeGate onAccessGranted={handleAccessGranted} />;
   }
 
   return (
     <MainLayout 
-      userName={userData?.name || 'Friend'}
-      userAvatar={userData?.avatar || '😊'}
-      userInterests={userData?.interests || []}
+      userName="User"
+      userAvatar="👤"
+      userInterests={['messaging', 'calls', 'documents']}
     />
   );
 };
