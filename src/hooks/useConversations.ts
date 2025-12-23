@@ -162,6 +162,17 @@ export const useConversations = () => {
     if (!user) return null;
 
     try {
+      // For direct chats, check if conversation already exists
+      if (type === 'direct' && participantIds.length === 1) {
+        const existingConv = conversations.find(conv => 
+          conv.type === 'direct' && 
+          conv.participants?.some(p => p.user_id === participantIds[0])
+        );
+        if (existingConv) {
+          return existingConv;
+        }
+      }
+
       // Create conversation
       const { data: conv, error: convError } = await supabase
         .from('conversations')
@@ -178,20 +189,32 @@ export const useConversations = () => {
         return null;
       }
 
-      // Add participants
-      const participants = [user.id, ...participantIds].map(userId => ({
-        conversation_id: conv.id,
-        user_id: userId,
-        role: userId === user.id ? 'admin' : 'member',
-      }));
-
-      const { error: partError } = await supabase
+      // Add current user as participant first
+      const { error: selfError } = await supabase
         .from('conversation_participants')
-        .insert(participants);
+        .insert({
+          conversation_id: conv.id,
+          user_id: user.id,
+          role: 'admin',
+        });
 
-      if (partError) {
-        console.error('Error adding participants:', partError);
-        return null;
+      if (selfError) {
+        console.error('Error adding self as participant:', selfError);
+      }
+
+      // Add other participants
+      for (const userId of participantIds) {
+        const { error: partError } = await supabase
+          .from('conversation_participants')
+          .insert({
+            conversation_id: conv.id,
+            user_id: userId,
+            role: 'member',
+          });
+
+        if (partError) {
+          console.error('Error adding participant:', partError);
+        }
       }
 
       await fetchConversations();
