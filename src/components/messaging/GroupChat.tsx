@@ -109,17 +109,23 @@ export const GroupChat = ({
         },
         (payload) => {
           const msg = payload.new as any;
-          const member = members.find(m => m.id === msg.sender_id);
-          const newMessage: Message = {
-            id: msg.id,
-            content: msg.content || '',
-            senderId: msg.sender_id || '',
-            senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
-            timestamp: new Date(msg.created_at),
-            status: 'delivered',
-            attachments: msg.metadata?.attachments as MessageAttachment[] | undefined,
-          };
-          setMessages(prev => [...prev, newMessage]);
+          // Check if message already exists to prevent duplicates
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) {
+              return prev;
+            }
+            const member = members.find(m => m.id === msg.sender_id);
+            const newMessage: Message = {
+              id: msg.id,
+              content: msg.content || '',
+              senderId: msg.sender_id || '',
+              senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
+              timestamp: new Date(msg.created_at),
+              status: 'delivered',
+              attachments: msg.metadata?.attachments as MessageAttachment[] | undefined,
+            };
+            return [...prev, newMessage];
+          });
         }
       )
       .subscribe();

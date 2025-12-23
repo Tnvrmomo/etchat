@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -160,6 +161,9 @@ export const ChatsView = ({ onStartCall }: ChatsViewProps) => {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Start New Chat</DialogTitle>
+                  <DialogDescription>
+                    Select a user to start a conversation with.
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2 mt-4">
                   {getOtherProfiles().length === 0 ? (
