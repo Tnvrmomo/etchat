@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServerSettings } from '@/components/settings/ServerSettings';
+import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
 import { useServerStatus } from '@/hooks/useServerStatus';
 import { useUserStats } from '@/hooks/useUserStats';
 
@@ -24,7 +25,7 @@ interface ProfileViewProps {
   interests: string[];
 }
 
-type SettingsView = 'main' | 'server';
+type SettingsView = 'main' | 'server' | 'notifications';
 
 export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
   const { signOut, profile } = useAuth();
@@ -32,7 +33,6 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
   const { stats } = useUserStats();
   const [currentView, setCurrentView] = useState<SettingsView>('main');
   const [darkMode, setDarkMode] = useState(false);
-  const [notifications, setNotifications] = useState(true);
 
   useEffect(() => {
     // Check for dark mode
@@ -71,6 +71,25 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
           <h1 className="font-display text-xl font-bold text-foreground">Server Settings</h1>
         </div>
         <ServerSettings />
+      </div>
+    );
+  }
+
+  if (currentView === 'notifications') {
+    return (
+      <div className="px-4 max-w-md mx-auto pb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCurrentView('main')}
+            className="rounded-organic"
+          >
+            ← Back
+          </Button>
+          <h1 className="font-display text-xl font-bold text-foreground">Notifications</h1>
+        </div>
+        <PushNotificationSettings />
       </div>
     );
   }
@@ -136,16 +155,21 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
           <h2 className="font-display font-semibold text-foreground">Settings</h2>
         </div>
         <div className="divide-y divide-border">
-          <div className="flex items-center justify-between px-4 py-4">
+          <button
+            onClick={() => setCurrentView('notifications')}
+            className="w-full flex items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors"
+          >
             <div className="flex items-center gap-3">
               <Bell className="w-5 h-5 text-muted-foreground" />
-              <span className="font-display text-foreground">Notifications</span>
+              <div className="text-left">
+                <span className="font-display text-foreground block">Notifications</span>
+                <span className="text-xs text-muted-foreground">
+                  Push & in-app notifications
+                </span>
+              </div>
             </div>
-            <Switch 
-              checked={notifications}
-              onCheckedChange={setNotifications}
-            />
-          </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
           
           <div className="flex items-center justify-between px-4 py-4">
             <div className="flex items-center gap-3">
