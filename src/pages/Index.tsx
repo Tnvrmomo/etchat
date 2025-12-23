@@ -4,11 +4,14 @@ import { AuthPage } from '@/components/auth/AuthPage';
 import { ProfileSetupPage } from '@/components/auth/ProfileSetupPage';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PWAUpdatePrompt } from '@/components/pwa/PWAUpdatePrompt';
+import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
+import { NotificationOnboarding } from '@/components/onboarding/NotificationOnboarding';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 const Index = () => {
   const [hasAccessCode, setHasAccessCode] = useState(false);
+  const [showNotificationOnboarding, setShowNotificationOnboarding] = useState(false);
   const { user, profile, isLoading, isProfileComplete, refreshProfile } = useAuth();
 
   useEffect(() => {
@@ -18,6 +21,18 @@ const Index = () => {
       setHasAccessCode(true);
     }
   }, []);
+
+  // Check if we should show notification onboarding
+  useEffect(() => {
+    if (user && isProfileComplete) {
+      const notificationsSkipped = localStorage.getItem('et-chat-notifications-skipped');
+      const notificationsShown = localStorage.getItem('et-chat-notifications-shown');
+      
+      if (!notificationsSkipped && !notificationsShown && Notification.permission === 'default') {
+        setShowNotificationOnboarding(true);
+      }
+    }
+  }, [user, isProfileComplete]);
 
   const handleAccessGranted = () => {
     setHasAccessCode(true);
@@ -29,6 +44,11 @@ const Index = () => {
 
   const handleProfileComplete = () => {
     refreshProfile();
+  };
+
+  const handleNotificationOnboardingComplete = () => {
+    localStorage.setItem('et-chat-notifications-shown', 'true');
+    setShowNotificationOnboarding(false);
   };
 
   // Show loading state
@@ -76,7 +96,17 @@ const Index = () => {
     );
   }
 
-  // Step 4: Main app
+  // Step 4: Notification onboarding (first time only)
+  if (showNotificationOnboarding) {
+    return (
+      <>
+        <NotificationOnboarding onComplete={handleNotificationOnboardingComplete} />
+        <PWAUpdatePrompt />
+      </>
+    );
+  }
+
+  // Step 5: Main app
   return (
     <>
       <MainLayout 
@@ -85,6 +115,7 @@ const Index = () => {
         userInterests={['messaging', 'calls', 'documents']}
       />
       <PWAUpdatePrompt />
+      <PWAInstallPrompt />
     </>
   );
 };
