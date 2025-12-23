@@ -1,32 +1,16 @@
 import { useState } from 'react';
-import { Phone, Video, PhoneIncoming, PhoneMissed, PhoneOutgoing, User, Clock } from 'lucide-react';
+import { Phone, Video, PhoneIncoming, PhoneMissed, PhoneOutgoing, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-interface CallRecord {
-  id: string;
-  name: string;
-  avatar: string;
-  type: 'voice' | 'video';
-  direction: 'incoming' | 'outgoing' | 'missed';
-  timestamp: Date;
-  duration?: number;
-}
-
-const demoCallHistory: CallRecord[] = [
-  { id: '1', name: 'Alex Chen', avatar: '👨‍💻', type: 'video', direction: 'outgoing', timestamp: new Date(Date.now() - 1000 * 60 * 30), duration: 245 },
-  { id: '2', name: 'Sarah Wilson', avatar: '👩‍🎨', type: 'voice', direction: 'missed', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2) },
-  { id: '3', name: 'Team Meeting', avatar: '👥', type: 'video', direction: 'incoming', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), duration: 3600 },
-  { id: '4', name: 'Jordan Lee', avatar: '🧑‍🔬', type: 'voice', direction: 'outgoing', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), duration: 180 },
-  { id: '5', name: 'Marketing Group', avatar: '📣', type: 'video', direction: 'missed', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48) },
-];
+import { useCallHistory, CallRecord } from '@/hooks/useCallHistory';
 
 export const CallsView = () => {
+  const { calls, isLoading } = useCallHistory();
   const [filter, setFilter] = useState<'all' | 'missed'>('all');
 
   const filteredCalls = filter === 'missed' 
-    ? demoCallHistory.filter(c => c.direction === 'missed')
-    : demoCallHistory;
+    ? calls.filter(c => c.direction === 'missed')
+    : calls;
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -34,7 +18,8 @@ export const CallsView = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -79,10 +64,15 @@ export const CallsView = () => {
 
       {/* Call history */}
       <div className="flex-1 overflow-auto">
-        {filteredCalls.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        ) : filteredCalls.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Phone className="w-12 h-12 mb-4 opacity-50" />
             <p className="font-display">No {filter === 'missed' ? 'missed ' : ''}calls yet</p>
+            <p className="text-sm mt-2">Your call history will appear here</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -93,7 +83,7 @@ export const CallsView = () => {
               >
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-2xl">
-                  {call.avatar}
+                  {call.caller_profile?.avatar_url || '👤'}
                 </div>
 
                 {/* Call info */}
@@ -103,13 +93,13 @@ export const CallsView = () => {
                       "font-display font-medium truncate",
                       call.direction === 'missed' && "text-destructive"
                     )}>
-                      {call.name}
+                      {call.caller_profile?.display_name || 'Unknown'}
                     </span>
-                    {call.type === 'video' && <Video className="w-4 h-4 text-muted-foreground" />}
+                    {call.call_type === 'video' && <Video className="w-4 h-4 text-muted-foreground" />}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     {getDirectionIcon(call.direction)}
-                    <span>{formatTime(call.timestamp)}</span>
+                    <span>{formatTime(call.created_at)}</span>
                     {call.duration && (
                       <>
                         <span>•</span>
@@ -125,7 +115,7 @@ export const CallsView = () => {
                   size="icon"
                   className="text-primary hover:bg-primary/10"
                 >
-                  {call.type === 'video' ? (
+                  {call.call_type === 'video' ? (
                     <Video className="w-5 h-5" />
                   ) : (
                     <Phone className="w-5 h-5" />

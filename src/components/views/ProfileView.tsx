@@ -2,6 +2,7 @@ import { Settings, LogOut, Bell, Moon, Shield, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProfileViewProps {
   name: string;
@@ -10,9 +11,11 @@ interface ProfileViewProps {
 }
 
 export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
-  const handleLogout = () => {
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
     localStorage.removeItem('et-chat-access');
-    window.location.reload();
+    await signOut();
   };
 
   const settingsItems = [
