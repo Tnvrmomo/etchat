@@ -3,8 +3,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Phone, Video, MoreVertical, Users } from 'lucide-react';
-import { MessageBubble, Message } from './MessageBubble';
+import { MessageBubble, Message, MessageAttachment } from './MessageBubble';
 import { MessageInput } from './MessageInput';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 interface GroupMember {
   id: string;
@@ -26,50 +28,7 @@ interface GroupChatProps {
   onShowMembers: () => void;
 }
 
-// Demo group messages
-const demoGroupMessages: Message[] = [
-  {
-    id: '1',
-    content: "Hey team! The new release is ready for testing.",
-    senderId: 'member-1',
-    senderName: 'Alex Chen',
-    timestamp: new Date(Date.now() - 7200000),
-    status: 'read',
-  },
-  {
-    id: '2',
-    content: 'Awesome! I will start testing the voice calling feature.',
-    senderId: 'member-2',
-    senderName: 'Sarah Miller',
-    timestamp: new Date(Date.now() - 7100000),
-    status: 'read',
-  },
-  {
-    id: '3',
-    content: "I'll handle the video calling tests 🎥",
-    senderId: 'member-3',
-    senderName: 'Jordan Lee',
-    timestamp: new Date(Date.now() - 7000000),
-    status: 'read',
-  },
-  {
-    id: '4',
-    content: "Great teamwork everyone! Let's sync up after testing.",
-    senderId: 'current-user',
-    senderName: 'You',
-    timestamp: new Date(Date.now() - 6900000),
-    status: 'delivered',
-  },
-  {
-    id: '5',
-    content: 'The screen sharing is working perfectly! 🚀',
-    senderId: 'member-2',
-    senderName: 'Sarah Miller',
-    timestamp: new Date(Date.now() - 3600000),
-    status: 'read',
-  },
-];
-
+// Demo members (fallback)
 const demoMembers: GroupMember[] = [
   { id: 'current-user', name: 'You', isOnline: true, role: 'admin' },
   { id: 'member-1', name: 'Alex Chen', isOnline: true, role: 'admin' },
@@ -89,11 +48,86 @@ export const GroupChat = ({
   onGroupVideoCall,
   onShowMembers,
 }: GroupChatProps) => {
-  const [messages, setMessages] = useState<Message[]>(demoGroupMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const onlineCount = members.filter(m => m.isOnline).length;
+
+  // Fetch messages
+  useEffect(() => {
+    const fetchMessages = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', groupId)
+          .order('created_at', { ascending: true })
+          .limit(100);
+
+        if (error) {
+          console.error('Error fetching group messages:', error);
+          return;
+        }
+
+        const formattedMessages: Message[] = (data || []).map(msg => {
+          const metadata = msg.metadata as { attachments?: MessageAttachment[] } | null;
+          const member = members.find(m => m.id === msg.sender_id);
+          return {
+            id: msg.id,
+            content: msg.content || '',
+            senderId: msg.sender_id || '',
+            senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
+            timestamp: new Date(msg.created_at),
+            status: 'read' as const,
+            attachments: metadata?.attachments,
+          };
+        });
+
+        setMessages(formattedMessages);
+      } catch (err) {
+        console.error('Error in fetchMessages:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMessages();
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel(`group-messages:${groupId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${groupId}`,
+        },
+        (payload) => {
+          const msg = payload.new as any;
+          const member = members.find(m => m.id === msg.sender_id);
+          const newMessage: Message = {
+            id: msg.id,
+            content: msg.content || '',
+            senderId: msg.sender_id || '',
+            senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
+            timestamp: new Date(msg.created_at),
+            status: 'delivered',
+            attachments: msg.metadata?.attachments as MessageAttachment[] | undefined,
+          };
+          setMessages(prev => [...prev, newMessage]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [groupId, currentUserId, members]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -101,17 +135,20 @@ export const GroupChat = ({
     }
   }, [messages]);
 
-  const handleSend = (content: string) => {
+  const handleSend = async (content: string, attachments?: MessageAttachment[]) => {
+    const tempId = `temp-${Date.now()}`;
+    
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: tempId,
       content,
       senderId: currentUserId,
       senderName: 'You',
       timestamp: new Date(),
       status: 'sending',
+      attachments,
       replyTo: replyTo ? {
         id: replyTo.id,
-        content: replyTo.content,
+        content: replyTo.content || (replyTo.attachments ? '📎 Attachment' : ''),
         senderName: replyTo.senderName,
       } : undefined,
     };
@@ -119,11 +156,39 @@ export const GroupChat = ({
     setMessages(prev => [...prev, newMessage]);
     setReplyTo(null);
 
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([{
+          conversation_id: groupId,
+          sender_id: currentUserId,
+          content,
+          message_type: attachments && attachments.length > 0 ? 'file' : 'text',
+          metadata: attachments ? JSON.parse(JSON.stringify({ attachments })) : null,
+          reply_to_id: replyTo?.id || null,
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error sending group message:', error);
+        return;
+      }
+
+      // Update temp message with real id
       setMessages(prev =>
-        prev.map(m => m.id === newMessage.id ? { ...m, status: 'sent' } : m)
+        prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' as const } : m)
       );
-    }, 500);
+
+      // Update conversation updated_at
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', groupId);
+
+    } catch (err) {
+      console.error('Error in handleSend:', err);
+    }
   };
 
   return (
@@ -164,31 +229,44 @@ export const GroupChat = ({
       </div>
 
       {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 py-4">
-        <div className="space-y-1">
-          {messages.map((message, index) => {
-            const isOwn = message.senderId === currentUserId;
-            const showAvatar = index === 0 || messages[index - 1].senderId !== message.senderId;
-
-            return (
-              <div key={message.id}>
-                {/* Show sender name for group messages */}
-                {!isOwn && showAvatar && (
-                  <p className="text-xs text-primary font-medium px-16 mb-1">
-                    {message.senderName}
-                  </p>
-                )}
-                <MessageBubble
-                  message={message}
-                  isOwn={isOwn}
-                  showAvatar={showAvatar}
-                  onReply={() => setReplyTo(message)}
-                />
-              </div>
-            );
-          })}
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
         </div>
-      </ScrollArea>
+      ) : (
+        <ScrollArea ref={scrollRef} className="flex-1 py-4">
+          <div className="space-y-1">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                <p className="font-display">No messages yet</p>
+                <p className="text-sm mt-2">Start the group conversation!</p>
+              </div>
+            ) : (
+              messages.map((message, index) => {
+                const isOwn = message.senderId === currentUserId;
+                const showAvatar = index === 0 || messages[index - 1].senderId !== message.senderId;
+
+                return (
+                  <div key={message.id}>
+                    {/* Show sender name for group messages */}
+                    {!isOwn && showAvatar && (
+                      <p className="text-xs text-primary font-medium px-16 mb-1">
+                        {message.senderName}
+                      </p>
+                    )}
+                    <MessageBubble
+                      message={message}
+                      isOwn={isOwn}
+                      showAvatar={showAvatar}
+                      onReply={() => setReplyTo(message)}
+                    />
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </ScrollArea>
+      )}
 
       {/* Input */}
       <MessageInput
@@ -196,6 +274,7 @@ export const GroupChat = ({
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         placeholder="Type a message to the group..."
+        conversationId={groupId}
       />
     </div>
   );

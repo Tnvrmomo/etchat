@@ -86,8 +86,24 @@
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground font-body antialiased;
+    overscroll-behavior-y: contain;
+  }
+
+  /* PWA safe area handling */
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .safe-area-pb {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .safe-area-pt {
+      padding-top: env(safe-area-inset-top);
+    }
   }
 }
 

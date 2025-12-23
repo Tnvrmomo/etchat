@@ -19,8 +19,11 @@ export const BottomNav = ({ active, onNavigate, unreadCount = 0, missedCalls = 0
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-t border-border safe-area-pb">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+    <nav 
+      className="fixed bottom-0 left-0 right-0 z-50 bg-card/90 backdrop-blur-lg border-t border-border"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = active === item.id;
@@ -30,7 +33,7 @@ export const BottomNav = ({ active, onNavigate, unreadCount = 0, missedCalls = 0
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                'flex flex-col items-center gap-1 px-4 py-2 rounded-organic transition-all duration-300',
+                'flex flex-col items-center gap-1 px-4 py-2 rounded-organic transition-all duration-300 min-w-[64px] active:scale-95',
                 isActive 
                   ? 'text-primary' 
                   : 'text-muted-foreground hover:text-foreground'
@@ -45,7 +48,7 @@ export const BottomNav = ({ active, onNavigate, unreadCount = 0, missedCalls = 0
                   isActive && 'scale-110'
                 )} />
                 {'badge' in item && item.badge && item.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-bold rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs font-bold rounded-full flex items-center justify-center animate-scale-in">
                     {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
