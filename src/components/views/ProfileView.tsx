@@ -1,8 +1,21 @@
-import { Settings, LogOut, Bell, Moon, Shield, HelpCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { 
+  Settings, 
+  LogOut, 
+  Bell, 
+  Moon, 
+  Shield, 
+  HelpCircle,
+  Server,
+  Wifi,
+  WifiOff,
+  ChevronRight,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { ServerSettings } from '@/components/settings/ServerSettings';
+import { useServerStatus } from '@/hooks/useServerStatus';
 
 interface ProfileViewProps {
   name: string;
@@ -10,30 +23,94 @@ interface ProfileViewProps {
   interests: string[];
 }
 
+type SettingsView = 'main' | 'server';
+
 export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
+  const { isOnline, emergencyConfig } = useServerStatus();
+  const [currentView, setCurrentView] = useState<SettingsView>('main');
+  const [darkMode, setDarkMode] = useState(false);
+  const [notifications, setNotifications] = useState(true);
+
+  useEffect(() => {
+    // Check for dark mode
+    const isDark = document.documentElement.classList.contains('dark');
+    setDarkMode(isDark);
+  }, []);
+
+  const toggleDarkMode = (enabled: boolean) => {
+    setDarkMode(enabled);
+    if (enabled) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
 
   const handleLogout = async () => {
     localStorage.removeItem('et-chat-access');
     await signOut();
   };
 
-  const settingsItems = [
-    { icon: Bell, label: 'Notifications', hasToggle: true },
-    { icon: Moon, label: 'Dark Mode', hasToggle: true },
-    { icon: Shield, label: 'Privacy & Security' },
-    { icon: HelpCircle, label: 'Help & Support' },
-  ];
+  if (currentView === 'server') {
+    return (
+      <div className="px-4 max-w-md mx-auto pb-8">
+        <div className="flex items-center gap-3 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCurrentView('main')}
+            className="rounded-organic"
+          >
+            ← Back
+          </Button>
+          <h1 className="font-display text-xl font-bold text-foreground">Server Settings</h1>
+        </div>
+        <ServerSettings />
+      </div>
+    );
+  }
 
   return (
     <div className="px-4 max-w-md mx-auto space-y-6 pb-8">
+      {/* Connection Status Banner */}
+      {(!isOnline || emergencyConfig.offlineMode) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-organic-lg p-3 flex items-center gap-3">
+          <WifiOff className="w-5 h-5 text-amber-500" />
+          <div>
+            <p className="font-display text-sm font-medium text-foreground">
+              {emergencyConfig.offlineMode ? 'Emergency Mode Active' : 'You\'re Offline'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Messages will sync when connected
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Profile card */}
       <div className="bg-card rounded-organic-xl p-6 text-center shadow-soft animate-fade-in-up">
         <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-5xl mb-4">
           {avatar}
         </div>
         <h1 className="font-display text-2xl font-bold text-foreground">{name}</h1>
-        <p className="text-muted-foreground text-sm mt-1">eT chat member</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          {profile?.username ? `@${profile.username}` : 'eT chat member'}
+        </p>
+        
+        <div className="flex justify-center gap-2 mt-3">
+          {isOnline ? (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-green-500 text-xs">
+              <Wifi className="w-3 h-3" /> Online
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs">
+              <WifiOff className="w-3 h-3" /> Offline
+            </span>
+          )}
+        </div>
         
         <div className="flex justify-center gap-8 mt-6 pt-4 border-t border-border">
           <div className="text-center">
@@ -57,19 +134,59 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
           <h2 className="font-display font-semibold text-foreground">Settings</h2>
         </div>
         <div className="divide-y divide-border">
-          {settingsItems.map((item) => (
-            <div key={item.label} className="flex items-center justify-between px-4 py-4">
-              <div className="flex items-center gap-3">
-                <item.icon className="w-5 h-5 text-muted-foreground" />
-                <span className="font-display text-foreground">{item.label}</span>
-              </div>
-              {item.hasToggle ? (
-                <Switch />
-              ) : (
-                <span className="text-muted-foreground">→</span>
-              )}
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="flex items-center gap-3">
+              <Bell className="w-5 h-5 text-muted-foreground" />
+              <span className="font-display text-foreground">Notifications</span>
             </div>
-          ))}
+            <Switch 
+              checked={notifications}
+              onCheckedChange={setNotifications}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="flex items-center gap-3">
+              <Moon className="w-5 h-5 text-muted-foreground" />
+              <span className="font-display text-foreground">Dark Mode</span>
+            </div>
+            <Switch 
+              checked={darkMode}
+              onCheckedChange={toggleDarkMode}
+            />
+          </div>
+
+          <button
+            onClick={() => setCurrentView('server')}
+            className="w-full flex items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Server className="w-5 h-5 text-muted-foreground" />
+              <div className="text-left">
+                <span className="font-display text-foreground block">Server & Sync</span>
+                <span className="text-xs text-muted-foreground">
+                  {isOnline ? 'Connected' : 'Offline Mode'}
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
+          
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-muted-foreground" />
+              <span className="font-display text-foreground">Privacy & Security</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </div>
+          
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="flex items-center gap-3">
+              <HelpCircle className="w-5 h-5 text-muted-foreground" />
+              <span className="font-display text-foreground">Help & Support</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </div>
         </div>
       </div>
 

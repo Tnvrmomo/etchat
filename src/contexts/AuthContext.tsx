@@ -6,6 +6,7 @@ interface UserProfile {
   id: string;
   user_id: string;
   display_name: string | null;
+  username: string | null;
   avatar_url: string | null;
   status: string | null;
   status_message: string | null;
