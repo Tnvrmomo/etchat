@@ -5,6 +5,7 @@ import { HomeView } from '@/components/views/HomeView';
 import { SpacesView } from '@/components/views/SpacesView';
 import { ProfileView } from '@/components/views/ProfileView';
 import { SocialDiscoveryView } from '@/components/views/SocialDiscoveryView';
+import { ChatsView } from '@/components/views/ChatsView';
 import { toast } from 'sonner';
 
 interface MainLayoutProps {
@@ -14,7 +15,8 @@ interface MainLayoutProps {
 }
 
 export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutProps) => {
-  const [activeNav, setActiveNav] = useState<'home' | 'spaces' | 'discover' | 'you'>('home');
+  const [activeNav, setActiveNav] = useState<'home' | 'chats' | 'spaces' | 'discover' | 'you'>('home');
+  const [unreadCount] = useState(3); // Demo unread count
 
   const handleCreate = (type: 'thread' | 'reel' | 'canvas' | 'space') => {
     const messages = {
@@ -40,6 +42,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       {/* Main content area */}
       <main className="relative z-10 pb-32 pt-6">
         {activeNav === 'home' && <HomeView />}
+        {activeNav === 'chats' && <ChatsView />}
         {activeNav === 'spaces' && <SpacesView />}
         {activeNav === 'discover' && <SocialDiscoveryView userInterests={userInterests} />}
         {activeNav === 'you' && (
@@ -53,7 +56,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
 
       {/* Navigation */}
       <CreateButton onAction={handleCreate} />
-      <BottomNav active={activeNav} onNavigate={setActiveNav} />
+      <BottomNav active={activeNav} onNavigate={setActiveNav} unreadCount={unreadCount} />
     </div>
   );
 };
