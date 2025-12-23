@@ -19,8 +19,8 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
 export const showNotification = (title: string, options?: NotificationOptions): void => {
   if (Notification.permission === 'granted') {
     new Notification(title, {
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
+      icon: '/et-chat-logo.jpg',
+      badge: '/et-chat-logo.jpg',
       ...options,
     });
   }
@@ -35,7 +35,7 @@ export const showCallNotification = (
   if (Notification.permission === 'granted') {
     const notification = new Notification(`${callerName} is calling...`, {
       body: `Incoming ${callType} call`,
-      icon: '/pwa-192x192.png',
+      icon: '/et-chat-logo.jpg',
       tag: 'incoming-call',
       requireInteraction: true,
       actions: [
@@ -59,7 +59,7 @@ export const showMessageNotification = (
   if (Notification.permission === 'granted') {
     const notification = new Notification(senderName, {
       body: message.length > 100 ? message.substring(0, 100) + '...' : message,
-      icon: '/pwa-192x192.png',
+      icon: '/et-chat-logo.jpg',
       tag: 'new-message',
     });
 
