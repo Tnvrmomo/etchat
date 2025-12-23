@@ -1,21 +1,21 @@
-import { Home, Users, User, Sparkles, MessageCircle } from 'lucide-react';
+import { MessageCircle, Phone, FileText, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type NavItem = 'home' | 'chats' | 'spaces' | 'discover' | 'you';
+type NavItem = 'chats' | 'calls' | 'files' | 'profile';
 
 interface BottomNavProps {
   active: NavItem;
   onNavigate: (item: NavItem) => void;
   unreadCount?: number;
+  missedCalls?: number;
 }
 
-export const BottomNav = ({ active, onNavigate, unreadCount = 0 }: BottomNavProps) => {
+export const BottomNav = ({ active, onNavigate, unreadCount = 0, missedCalls = 0 }: BottomNavProps) => {
   const items = [
-    { id: 'home' as const, icon: Home, label: 'Home' },
     { id: 'chats' as const, icon: MessageCircle, label: 'Chats', badge: unreadCount },
-    { id: 'spaces' as const, icon: Users, label: 'Spaces' },
-    { id: 'discover' as const, icon: Sparkles, label: 'Discover' },
-    { id: 'you' as const, icon: User, label: 'You' },
+    { id: 'calls' as const, icon: Phone, label: 'Calls', badge: missedCalls },
+    { id: 'files' as const, icon: FileText, label: 'Files' },
+    { id: 'profile' as const, icon: User, label: 'Profile' },
   ];
 
   return (

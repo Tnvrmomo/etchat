@@ -15,11 +15,11 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "robots.txt"],
+      includeAssets: ["favicon.ico", "robots.txt", "et-chat-logo.jpg"],
       manifest: {
-        name: "EngineersTech - Connect & Collaborate",
-        short_name: "EngineersTech",
-        description: "Real-time messaging, voice & video calls, screen sharing",
+        name: "eT chat - Real-time Messaging & Calls",
+        short_name: "eT chat",
+        description: "Real-time messaging, voice & video calls, group calling, document sharing",
         theme_color: "#E2725B",
         background_color: "#F5F1E6",
         display: "standalone",
@@ -28,19 +28,19 @@ export default defineConfig(({ mode }) => ({
         start_url: "/",
         icons: [
           {
-            src: "/pwa-192x192.png",
+            src: "/et-chat-logo.jpg",
             sizes: "192x192",
-            type: "image/png",
+            type: "image/jpeg",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "/et-chat-logo.jpg",
             sizes: "512x512",
-            type: "image/png",
+            type: "image/jpeg",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "/et-chat-logo.jpg",
             sizes: "512x512",
-            type: "image/png",
+            type: "image/jpeg",
             purpose: "maskable",
           },
         ],
