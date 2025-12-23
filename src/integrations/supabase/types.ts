@@ -440,6 +440,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_notification: {
+        Args: {
+          _body: string
+          _data?: Json
+          _icon?: string
+          _tag?: string
+          _title: string
+          _user_id: string
+        }
+        Returns: string
+      }
       get_user_call_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_conversation_ids: {
         Args: { _user_id: string }
@@ -459,6 +470,10 @@ export type Database = {
       }
       is_conversation_participant: {
         Args: { _conversation_id: string; _user_id: string }
+        Returns: boolean
+      }
+      shares_conversation_with: {
+        Args: { _current_user_id: string; _other_user_id: string }
         Returns: boolean
       }
     }
