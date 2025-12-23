@@ -171,6 +171,7 @@ export type Database = {
           id: string
           name: string | null
           type: string
+          typing_users: Json | null
           updated_at: string
         }
         Insert: {
@@ -180,6 +181,7 @@ export type Database = {
           id?: string
           name?: string | null
           type: string
+          typing_users?: Json | null
           updated_at?: string
         }
         Update: {
@@ -189,6 +191,7 @@ export type Database = {
           id?: string
           name?: string | null
           type?: string
+          typing_users?: Json | null
           updated_at?: string
         }
         Relationships: []
@@ -312,6 +315,33 @@ export type Database = {
           updated_at?: string
           user_id?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
         }
         Relationships: []
       }

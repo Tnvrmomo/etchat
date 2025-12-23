@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Phone, Video, MoreVertical } from 'lucide-react';
-import { MessageBubble, Message } from './MessageBubble';
+import { ArrowLeft, Phone, Video, MoreVertical, Search } from 'lucide-react';
+import { MessageBubble, Message, MessageAttachment } from './MessageBubble';
 import { MessageInput } from './MessageInput';
+import { cn } from '@/lib/utils';
 
 interface ChatContact {
   id: string;
@@ -22,7 +23,7 @@ interface ChatViewProps {
   onVideoCall: () => void;
 }
 
-// Demo messages
+// Demo messages with attachments
 const demoMessages: Message[] = [
   {
     id: '1',
@@ -42,19 +43,65 @@ const demoMessages: Message[] = [
   },
   {
     id: '3',
-    content: 'That sounds awesome! Can you tell me more about it?',
+    content: 'That sounds awesome! Check out this screenshot:',
     senderId: 'contact-1',
     senderName: 'Alex Chen',
     timestamp: new Date(Date.now() - 3400000),
     status: 'read',
+    attachments: [
+      {
+        id: 'img-1',
+        url: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400',
+        name: 'screenshot.jpg',
+        type: 'image',
+        size: 245000,
+        mimeType: 'image/jpeg',
+      }
+    ]
   },
   {
     id: '4',
-    content: "It's a real-time messaging system with voice and video calling capabilities. We're using WebRTC for the peer-to-peer connections.",
+    content: "Nice! Here's the documentation for the WebRTC implementation.",
     senderId: 'current-user',
     senderName: 'You',
     timestamp: new Date(Date.now() - 3300000),
     status: 'delivered',
+    attachments: [
+      {
+        id: 'file-1',
+        url: '#',
+        name: 'WebRTC_Documentation.pdf',
+        type: 'file',
+        size: 1250000,
+        mimeType: 'application/pdf',
+      }
+    ]
+  },
+  {
+    id: '5',
+    content: '',
+    senderId: 'contact-1',
+    senderName: 'Alex Chen',
+    timestamp: new Date(Date.now() - 3200000),
+    status: 'read',
+    attachments: [
+      {
+        id: 'img-2',
+        url: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=400',
+        name: 'code-preview.jpg',
+        type: 'image',
+        size: 320000,
+        mimeType: 'image/jpeg',
+      },
+      {
+        id: 'img-3',
+        url: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=400',
+        name: 'debug-session.jpg',
+        type: 'image',
+        size: 280000,
+        mimeType: 'image/jpeg',
+      }
+    ]
   },
 ];
 
@@ -67,6 +114,7 @@ export const ChatView = ({
 }: ChatViewProps) => {
   const [messages, setMessages] = useState<Message[]>(demoMessages);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +124,16 @@ export const ChatView = ({
     }
   }, [messages]);
 
-  const handleSend = (content: string) => {
+  // Simulate typing indicator
+  useEffect(() => {
+    if (contact.status === 'typing') {
+      setIsTyping(true);
+    } else {
+      setIsTyping(false);
+    }
+  }, [contact.status]);
+
+  const handleSend = (content: string, attachments?: MessageAttachment[]) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       content,
@@ -84,9 +141,10 @@ export const ChatView = ({
       senderName: 'You',
       timestamp: new Date(),
       status: 'sending',
+      attachments,
       replyTo: replyTo ? {
         id: replyTo.id,
-        content: replyTo.content,
+        content: replyTo.content || (replyTo.attachments ? '📎 Attachment' : ''),
         senderName: replyTo.senderName,
       } : undefined,
     };
@@ -109,7 +167,7 @@ export const ChatView = ({
   };
 
   const getStatusText = (): string => {
-    if (contact.status === 'typing') return 'typing...';
+    if (isTyping || contact.status === 'typing') return 'typing...';
     if (contact.status === 'online') return 'online';
     if (contact.lastSeen) {
       return `last seen ${contact.lastSeen.toLocaleTimeString('en-US', {
@@ -120,6 +178,30 @@ export const ChatView = ({
     }
     return 'offline';
   };
+
+  const groupMessagesByDate = (msgs: Message[]) => {
+    const groups: { date: string; messages: Message[] }[] = [];
+    let currentDate = '';
+
+    msgs.forEach(msg => {
+      const msgDate = msg.timestamp.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      if (msgDate !== currentDate) {
+        currentDate = msgDate;
+        groups.push({ date: msgDate, messages: [msg] });
+      } else {
+        groups[groups.length - 1].messages.push(msg);
+      }
+    });
+
+    return groups;
+  };
+
+  const messageGroups = groupMessagesByDate(messages);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -140,7 +222,10 @@ export const ChatView = ({
           <h2 className="font-display font-semibold text-foreground truncate">
             {contact.name}
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className={cn(
+            'text-xs',
+            isTyping || contact.status === 'typing' ? 'text-primary animate-pulse' : 'text-muted-foreground'
+          )}>
             {getStatusText()}
           </p>
         </div>
@@ -159,22 +244,53 @@ export const ChatView = ({
       </div>
 
       {/* Messages */}
-      <ScrollArea ref={scrollRef} className="flex-1 py-4">
-        <div className="space-y-1">
-          {messages.map((message, index) => {
-            const isOwn = message.senderId === currentUserId;
-            const showAvatar = index === 0 || messages[index - 1].senderId !== message.senderId;
+      <ScrollArea ref={scrollRef} className="flex-1 py-2">
+        <div className="space-y-4">
+          {messageGroups.map((group, groupIndex) => (
+            <div key={groupIndex}>
+              {/* Date Separator */}
+              <div className="flex items-center justify-center my-4">
+                <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                  {group.date}
+                </span>
+              </div>
 
-            return (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isOwn={isOwn}
-                showAvatar={showAvatar}
-                onReply={() => setReplyTo(message)}
-              />
-            );
-          })}
+              {/* Messages for this date */}
+              <div className="space-y-1">
+                {group.messages.map((message, index) => {
+                  const isOwn = message.senderId === currentUserId;
+                  const showAvatar = index === 0 || group.messages[index - 1].senderId !== message.senderId;
+
+                  return (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isOwn={isOwn}
+                      showAvatar={showAvatar}
+                      onReply={() => setReplyTo(message)}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Typing indicator */}
+          {isTyping && (
+            <div className="flex items-center gap-2 px-4 py-2">
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={contact.avatar} alt={contact.name} />
+                <AvatarFallback className="text-xs bg-accent text-accent-foreground">
+                  {contact.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex gap-1 px-4 py-3 bg-card rounded-2xl">
+                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 
@@ -183,6 +299,7 @@ export const ChatView = ({
         onSend={handleSend}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
+        conversationId={contact.id}
       />
     </div>
   );
