@@ -261,7 +261,7 @@ export const GroupChat = ({
           </h2>
           <p className="text-xs text-muted-foreground">
             {otherTypingUsers.length > 0 
-              ? `${otherTypingUsers[0].userName} is typing...`
+              ? `${otherTypingUsers[0].displayName} is typing...`
               : `${members.length} members, ${onlineCount} online`
             }
           </p>

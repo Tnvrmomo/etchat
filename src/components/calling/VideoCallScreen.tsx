@@ -153,7 +153,7 @@ export const VideoCallScreen = ({
             onToggleMute={onToggleMute}
             onToggleVideo={onToggleVideo}
             onToggleCamera={onToggleCamera}
-            onToggleScreenShare={isScreenSharing ? () => {} : onToggleScreenShare}
+            onToggleScreenShare={onToggleScreenShare}
             onEndCall={onEndCall}
           />
         </div>

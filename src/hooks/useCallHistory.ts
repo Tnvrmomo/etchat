@@ -6,6 +6,7 @@ export interface CallRecord {
   id: string;
   call_type: 'voice' | 'video';
   caller_id: string;
+  other_user_id?: string;
   conversation_id: string | null;
   status: string;
   created_at: string;
@@ -71,17 +72,35 @@ export const useCallHistory = () => {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-      // Fetch caller profiles and determine direction
+      // Fetch participant profiles and determine direction
       const callsWithDetails = await Promise.all(
         allCalls.map(async (call) => {
+          const isOutgoing = call.caller_id === user.id;
+          const participantRecord = participantData?.find(p => p.call_id === call.id);
+          
+          // For outgoing calls, get the other participant's profile
+          // For incoming calls, get the caller's profile
+          let otherUserId: string;
+          
+          if (isOutgoing) {
+            // Get the other participant (not the caller)
+            const { data: participants } = await supabase
+              .from('call_participants')
+              .select('user_id')
+              .eq('call_id', call.id)
+              .neq('user_id', user.id)
+              .limit(1);
+            
+            otherUserId = participants?.[0]?.user_id || call.caller_id;
+          } else {
+            otherUserId = call.caller_id;
+          }
+          
           const { data: profile } = await supabase
             .from('profiles')
             .select('display_name, avatar_url')
-            .eq('user_id', call.caller_id)
+            .eq('user_id', otherUserId)
             .single();
-
-          const isOutgoing = call.caller_id === user.id;
-          const participantRecord = participantData?.find(p => p.call_id === call.id);
           
           let direction: 'incoming' | 'outgoing' | 'missed';
           if (isOutgoing) {
@@ -103,6 +122,7 @@ export const useCallHistory = () => {
           return {
             ...call,
             call_type: call.call_type as 'voice' | 'video',
+            other_user_id: otherUserId,
             caller_profile: profile,
             direction,
             duration,

@@ -30,6 +30,7 @@ interface UseCallManagerReturn {
   
   // Actions
   startCall: (targetUserId: string, targetName: string, targetAvatar: string | undefined, callType: 'voice' | 'video') => Promise<void>;
+  startGroupCall: (participants: { id: string; name: string }[], callType: 'voice' | 'video', conversationId: string) => Promise<void>;
   acceptCall: () => Promise<void>;
   rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
@@ -288,6 +289,81 @@ export const useCallManager = (currentUserId: string | null): UseCallManagerRetu
     }
   }, [currentUserId, initializeWebRTC, createOffer, cleanupWebRTC]);
 
+  // Start group call
+  const startGroupCall = useCallback(async (
+    participants: { id: string; name: string }[],
+    callType: 'voice' | 'video',
+    conversationId: string
+  ) => {
+    if (!currentUserId) return;
+
+    try {
+      // Initialize WebRTC
+      await initializeWebRTC(callType);
+
+      // Create call in database with conversation ID for group
+      const { data: call, error: callError } = await supabase
+        .from('calls')
+        .insert({
+          caller_id: currentUserId,
+          call_type: callType,
+          conversation_id: conversationId,
+          status: 'ringing',
+          is_group_call: true,
+        })
+        .select()
+        .single();
+
+      if (callError) throw callError;
+
+      // Add all participants
+      const participantInserts = participants.map(p => ({
+        call_id: call.id,
+        user_id: p.id,
+        status: 'ringing',
+      }));
+
+      await supabase.from('call_participants').insert(participantInserts);
+
+      // Add caller as joined
+      await supabase.from('call_participants').insert({
+        call_id: call.id,
+        user_id: currentUserId,
+        status: 'joined',
+        joined_at: new Date().toISOString(),
+      });
+
+      setActiveCall({
+        id: call.id,
+        callType,
+        callerId: currentUserId,
+        callerName: `Group (${participants.length + 1})`,
+        isOutgoing: true,
+        targetUserId: participants[0]?.id,
+      });
+
+      // Send offer to first participant (for simplicity)
+      const offer = await createOffer();
+      if (participants[0]) {
+        await supabase.functions.invoke('webrtc-signaling', {
+          body: {
+            action: 'send-signal',
+            callId: call.id,
+            targetUserId: participants[0].id,
+            signalType: 'offer',
+            signalData: offer,
+          },
+        });
+      }
+
+      toast.success(`Starting group call...`);
+    } catch (error) {
+      console.error('Failed to start group call:', error);
+      toast.error('Failed to start group call');
+      cleanupWebRTC();
+    }
+  }, [currentUserId, initializeWebRTC, createOffer, cleanupWebRTC]);
+
   // Accept incoming call
   const acceptCall = useCallback(async () => {
     if (!incomingCall || !currentUserId) return;
@@ -371,6 +447,7 @@ export const useCallManager = (currentUserId: string | null): UseCallManagerRetu
     isVideoOff,
     isScreenSharing,
     startCall,
+    startGroupCall,
     acceptCall,
     rejectCall,
     endCall,
