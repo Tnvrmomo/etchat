@@ -95,6 +95,7 @@ export type Database = {
           created_at: string
           ended_at: string | null
           id: string
+          is_group_call: boolean | null
           started_at: string | null
           status: string
         }
@@ -105,6 +106,7 @@ export type Database = {
           created_at?: string
           ended_at?: string | null
           id?: string
+          is_group_call?: boolean | null
           started_at?: string | null
           status?: string
         }
@@ -115,6 +117,7 @@ export type Database = {
           created_at?: string
           ended_at?: string | null
           id?: string
+          is_group_call?: boolean | null
           started_at?: string | null
           status?: string
         }
@@ -127,6 +130,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contacts: {
+        Row: {
+          contact_user_id: string
+          created_at: string | null
+          id: string
+          is_blocked: boolean | null
+          is_favorite: boolean | null
+          nickname: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          contact_user_id: string
+          created_at?: string | null
+          id?: string
+          is_blocked?: boolean | null
+          is_favorite?: boolean | null
+          nickname?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          contact_user_id?: string
+          created_at?: string | null
+          id?: string
+          is_blocked?: boolean | null
+          is_favorite?: boolean | null
+          nickname?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       conversation_participants: {
         Row: {

@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BottomNav } from './BottomNav';
 import { ProfileView } from '@/components/views/ProfileView';
 import { ChatsView } from '@/components/views/ChatsView';
 import { CallsView } from '@/components/views/CallsView';
 import { FilesView } from '@/components/views/FilesView';
+import { ContactsView } from '@/components/contacts/ContactsView';
 import { IncomingCallModal } from '@/components/calling/IncomingCallModal';
 import { VideoCallScreen } from '@/components/calling/VideoCallScreen';
 import { VoiceCallScreen } from '@/components/calling/VoiceCallScreen';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { useCallManager } from '@/hooks/useCallManager';
+import { useRingtone } from '@/hooks/useRingtone';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConnectionStatus } from '@/components/status/ConnectionStatus';
 import { CallState } from '@/utils/webrtc/RTCManager';
@@ -19,7 +22,7 @@ interface MainLayoutProps {
 }
 
 export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutProps) => {
-  const [activeNav, setActiveNav] = useState<'chats' | 'calls' | 'files' | 'profile'>('chats');
+  const [activeNav, setActiveNav] = useState<'chats' | 'calls' | 'files' | 'contacts' | 'profile'>('chats');
   const [unreadCount] = useState(3);
   const [missedCalls] = useState(1);
   
@@ -45,6 +48,17 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
     stopScreenShare,
   } = useCallManager(user?.id || null);
 
+  const { playRingtone, stopRingtone, playCallEnd } = useRingtone();
+
+  // Play ringtone when there's an incoming call
+  useEffect(() => {
+    if (incomingCall) {
+      playRingtone();
+    } else {
+      stopRingtone();
+    }
+  }, [incomingCall, playRingtone, stopRingtone]);
+
   const handleStartCall = (
     targetUserId: string,
     targetName: string,
@@ -52,6 +66,21 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
     callType: 'voice' | 'video'
   ) => {
     startCall(targetUserId, targetName, targetAvatar, callType);
+  };
+
+  const handleAcceptCall = () => {
+    stopRingtone();
+    acceptCall();
+  };
+
+  const handleRejectCall = () => {
+    stopRingtone();
+    rejectCall();
+  };
+
+  const handleEndCall = () => {
+    playCallEnd();
+    endCall();
   };
 
   return (
@@ -62,8 +91,8 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
           callerName={incomingCall.callerName}
           callerAvatar={incomingCall.callerAvatar}
           callType={incomingCall.callType}
-          onAccept={acceptCall}
-          onReject={rejectCall}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
         />
       )}
 
@@ -82,7 +111,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
           onToggleVideo={toggleVideo}
           onToggleCamera={toggleCamera}
           onToggleScreenShare={isScreenSharing ? stopScreenShare : startScreenShare}
-          onEndCall={endCall}
+          onEndCall={handleEndCall}
         />
       )}
 
@@ -94,7 +123,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
           callState={callState as CallState}
           isMuted={isMuted}
           onToggleMute={toggleMute}
-          onEndCall={endCall}
+          onEndCall={handleEndCall}
           remoteStream={remoteStream}
         />
       )}
@@ -114,7 +143,10 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
             </div>
             <h1 className="font-display text-xl font-bold text-foreground">eT chat</h1>
           </div>
-          <ConnectionStatus compact />
+          <div className="flex items-center gap-2">
+            <NotificationCenter />
+            <ConnectionStatus compact />
+          </div>
         </div>
       </header>
 
@@ -122,6 +154,15 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       <main className="relative z-10 pb-24">
         {activeNav === 'chats' && <ChatsView onStartCall={handleStartCall} />}
         {activeNav === 'calls' && <CallsView onStartCall={handleStartCall} />}
+        {activeNav === 'contacts' && (
+          <ContactsView 
+            onStartCall={handleStartCall}
+            onStartChat={(userId, displayName) => {
+              // Navigate to chats and open conversation
+              setActiveNav('chats');
+            }}
+          />
+        )}
         {activeNav === 'files' && <FilesView />}
         {activeNav === 'profile' && (
           <ProfileView 
