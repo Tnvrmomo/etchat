@@ -90,13 +90,19 @@ export const MessageInput = ({
         throw error;
       }
 
-      const { data: urlData } = supabase.storage
+      // Use signed URL since bucket is now private for security
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('chat-attachments')
-        .getPublicUrl(data.path);
+        .createSignedUrl(data.path, 60 * 60 * 24 * 7); // 7 days expiry
+
+      if (signedUrlError) {
+        console.error('Signed URL error:', signedUrlError);
+        throw signedUrlError;
+      }
 
       return {
         id: data.path,
-        url: urlData.publicUrl,
+        url: signedUrlData.signedUrl,
         name: file.name,
         type: getFileType(file.type),
         size: file.size,

@@ -1,19 +1,80 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SignalPayload {
-  action: 'create-call' | 'join-call' | 'send-signal' | 'end-call' | 'reject-call';
-  callId?: string;
-  callType?: 'voice' | 'video';
-  targetUserId?: string;
-  signalType?: 'offer' | 'answer' | 'ice-candidate';
-  signalData?: any;
-  conversationId?: string;
+// Input validation schemas
+const uuidSchema = z.string().uuid();
+const callTypeSchema = z.enum(['voice', 'video']);
+const signalTypeSchema = z.enum(['offer', 'answer', 'ice-candidate']);
+
+const createCallSchema = z.object({
+  action: z.literal('create-call'),
+  callType: callTypeSchema.optional().default('voice'),
+  targetUserId: uuidSchema.optional(),
+  conversationId: uuidSchema.optional(),
+});
+
+const joinCallSchema = z.object({
+  action: z.literal('join-call'),
+  callId: uuidSchema,
+});
+
+const sendSignalSchema = z.object({
+  action: z.literal('send-signal'),
+  callId: uuidSchema,
+  targetUserId: uuidSchema,
+  signalType: signalTypeSchema,
+  signalData: z.record(z.unknown()).refine(
+    (data) => JSON.stringify(data).length < 50000,
+    { message: 'Signal data too large' }
+  ),
+});
+
+const endCallSchema = z.object({
+  action: z.literal('end-call'),
+  callId: uuidSchema,
+});
+
+const rejectCallSchema = z.object({
+  action: z.literal('reject-call'),
+  callId: uuidSchema,
+});
+
+const payloadSchema = z.discriminatedUnion('action', [
+  createCallSchema,
+  joinCallSchema,
+  sendSignalSchema,
+  endCallSchema,
+  rejectCallSchema,
+]);
+
+// Sanitize error messages to prevent information leakage
+function sanitizeError(error: unknown): string {
+  console.error('[Internal Error]:', error);
+  
+  if (error instanceof z.ZodError) {
+    return 'Invalid request parameters';
+  }
+  
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes('unauthorized') || msg.includes('auth')) {
+      return 'Authentication failed';
+    }
+    if (msg.includes('not found')) {
+      return 'Resource not found';
+    }
+    if (msg.includes('missing') || msg.includes('required')) {
+      return 'Missing required parameters';
+    }
+  }
+  
+  return 'An error occurred processing your request';
 }
 
 serve(async (req) => {
@@ -29,7 +90,8 @@ serve(async (req) => {
     // Get auth token from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header' }), {
+      console.log('No authorization header provided');
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -43,14 +105,26 @@ serve(async (req) => {
     // Get user from token
     const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (userError || !user) {
-      console.error('Auth error:', userError);
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      console.error('Auth error:', userError?.message);
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const payload: SignalPayload = await req.json();
+    // Parse and validate input
+    const rawPayload = await req.json();
+    const parseResult = payloadSchema.safeParse(rawPayload);
+    
+    if (!parseResult.success) {
+      console.error('Validation error:', parseResult.error.errors);
+      return new Response(
+        JSON.stringify({ error: 'Invalid request parameters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const payload = parseResult.data;
     console.log(`Signaling action: ${payload.action} from user: ${user.id}`);
 
     switch (payload.action) {
@@ -60,7 +134,7 @@ serve(async (req) => {
           .from('calls')
           .insert({
             caller_id: user.id,
-            call_type: payload.callType || 'voice',
+            call_type: payload.callType,
             conversation_id: payload.conversationId,
             status: 'ringing',
           })
@@ -68,8 +142,8 @@ serve(async (req) => {
           .single();
 
         if (callError) {
-          console.error('Error creating call:', callError);
-          throw callError;
+          console.error('Error creating call:', callError.message);
+          throw new Error('Failed to create call');
         }
 
         // Add caller as participant
@@ -87,10 +161,8 @@ serve(async (req) => {
             user_id: payload.targetUserId,
             status: 'ringing',
           });
-        }
 
-        // Create notification for the target user
-        if (payload.targetUserId) {
+          // Create notification for the target user
           const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
           
           // Get caller profile
@@ -104,7 +176,7 @@ serve(async (req) => {
           
           await serviceClient.rpc('create_notification', {
             _user_id: payload.targetUserId,
-            _title: `Incoming ${payload.callType || 'voice'} call`,
+            _title: `Incoming ${payload.callType} call`,
             _body: `${callerName} is calling you`,
             _icon: '📞',
             _tag: `call:${call.id}`,
@@ -119,10 +191,6 @@ serve(async (req) => {
       }
 
       case 'join-call': {
-        if (!payload.callId) {
-          throw new Error('Call ID is required');
-        }
-
         // Update call status
         await supabase
           .from('calls')
@@ -143,10 +211,6 @@ serve(async (req) => {
       }
 
       case 'send-signal': {
-        if (!payload.callId || !payload.targetUserId || !payload.signalType || !payload.signalData) {
-          throw new Error('Missing required signal parameters');
-        }
-
         // Store signal in database (will be picked up via realtime)
         const { error: signalError } = await supabase.from('call_signals').insert({
           call_id: payload.callId,
@@ -157,8 +221,8 @@ serve(async (req) => {
         });
 
         if (signalError) {
-          console.error('Error sending signal:', signalError);
-          throw signalError;
+          console.error('Error sending signal:', signalError.message);
+          throw new Error('Failed to send signal');
         }
 
         console.log(`Signal ${payload.signalType} sent from ${user.id} to ${payload.targetUserId}`);
@@ -168,10 +232,6 @@ serve(async (req) => {
       }
 
       case 'end-call': {
-        if (!payload.callId) {
-          throw new Error('Call ID is required');
-        }
-
         // Update call status
         await supabase
           .from('calls')
@@ -192,10 +252,6 @@ serve(async (req) => {
       }
 
       case 'reject-call': {
-        if (!payload.callId) {
-          throw new Error('Call ID is required');
-        }
-
         // Update participant status
         await supabase
           .from('call_participants')
@@ -225,12 +281,14 @@ serve(async (req) => {
       }
 
       default:
-        throw new Error(`Unknown action: ${payload.action}`);
+        return new Response(JSON.stringify({ error: 'Invalid action' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
     }
   } catch (error) {
-    console.error('Signaling error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    const safeMessage = sanitizeError(error);
+    return new Response(JSON.stringify({ error: safeMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
