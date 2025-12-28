@@ -1,12 +1,18 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Phone, Video, MoreVertical, Users } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Users, Search } from 'lucide-react';
 import { MessageBubble, Message, MessageAttachment } from './MessageBubble';
 import { MessageInput } from './MessageInput';
+import { MessageSearch } from './MessageSearch';
+import { ForwardMessageDialog } from './ForwardMessageDialog';
+import { TypingIndicator } from './TypingIndicator';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
+import { useReadReceipts } from '@/hooks/useReadReceipts';
+import { useMessageReactions } from '@/hooks/useMessageReactions';
 
 interface GroupMember {
   id: string;
@@ -28,7 +34,6 @@ interface GroupChatProps {
   onShowMembers: () => void;
 }
 
-// Demo members (fallback)
 const demoMembers: GroupMember[] = [
   { id: 'current-user', name: 'You', isOnline: true, role: 'admin' },
   { id: 'member-1', name: 'Alex Chen', isOnline: true, role: 'admin' },
@@ -51,9 +56,20 @@ export const GroupChat = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const onlineCount = members.filter(m => m.isOnline).length;
+
+  // Hooks for typing, read receipts, and reactions
+  const { typingUsers, setTyping } = useTypingIndicator(groupId);
+  const { markMultipleAsRead, getReadStatus, getReadBy } = useReadReceipts(groupId);
+  const { toggleReaction, getReactionSummary } = useMessageReactions(groupId);
+
+  // Filter out current user from typing users
+  const otherTypingUsers = typingUsers.filter(u => u.userId !== currentUserId);
 
   // Fetch messages
   useEffect(() => {
@@ -80,6 +96,7 @@ export const GroupChat = ({
             content: msg.content || '',
             senderId: msg.sender_id || '',
             senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
+            senderAvatar: member?.avatar,
             timestamp: new Date(msg.created_at),
             status: 'read' as const,
             attachments: metadata?.attachments,
@@ -87,6 +104,15 @@ export const GroupChat = ({
         });
 
         setMessages(formattedMessages);
+
+        // Mark messages from others as read
+        const unreadMessageIds = (data || [])
+          .filter(msg => msg.sender_id !== currentUserId)
+          .map(msg => msg.id);
+        
+        if (unreadMessageIds.length > 0) {
+          markMultipleAsRead(unreadMessageIds);
+        }
       } catch (err) {
         console.error('Error in fetchMessages:', err);
       } finally {
@@ -109,7 +135,6 @@ export const GroupChat = ({
         },
         (payload) => {
           const msg = payload.new as any;
-          // Check if message already exists to prevent duplicates
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) {
               return prev;
@@ -120,10 +145,17 @@ export const GroupChat = ({
               content: msg.content || '',
               senderId: msg.sender_id || '',
               senderName: msg.sender_id === currentUserId ? 'You' : (member?.name || 'Unknown'),
+              senderAvatar: member?.avatar,
               timestamp: new Date(msg.created_at),
               status: 'delivered',
               attachments: msg.metadata?.attachments as MessageAttachment[] | undefined,
             };
+            
+            // Mark as read if from other user
+            if (msg.sender_id !== currentUserId) {
+              markMultipleAsRead([msg.id]);
+            }
+            
             return [...prev, newMessage];
           });
         }
@@ -133,7 +165,7 @@ export const GroupChat = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupId, currentUserId, members]);
+  }, [groupId, currentUserId, members, markMultipleAsRead]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -181,12 +213,10 @@ export const GroupChat = ({
         return;
       }
 
-      // Update temp message with real id
       setMessages(prev =>
         prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' as const } : m)
       );
 
-      // Update conversation updated_at
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
@@ -195,6 +225,19 @@ export const GroupChat = ({
     } catch (err) {
       console.error('Error in handleSend:', err);
     }
+  };
+
+  const handleTyping = useCallback((isTyping: boolean) => {
+    setTyping(isTyping);
+  }, [setTyping]);
+
+  const handleSearchResultClick = (messageId: string) => {
+    setHighlightedMessageId(messageId);
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setTimeout(() => setHighlightedMessageId(null), 2000);
   };
 
   return (
@@ -217,9 +260,16 @@ export const GroupChat = ({
             {groupName}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {members.length} members, {onlineCount} online
+            {otherTypingUsers.length > 0 
+              ? `${otherTypingUsers[0].userName} is typing...`
+              : `${members.length} members, ${onlineCount} online`
+            }
           </p>
         </div>
+
+        <Button variant="ghost" size="icon" onClick={() => setShowSearch(!showSearch)}>
+          <Search className="w-5 h-5 text-muted-foreground" />
+        </Button>
 
         <Button variant="ghost" size="icon" onClick={onGroupCall}>
           <Phone className="w-5 h-5 text-secondary" />
@@ -233,6 +283,15 @@ export const GroupChat = ({
           <Users className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Search */}
+      <MessageSearch
+        conversationId={groupId}
+        isOpen={showSearch}
+        onClose={() => setShowSearch(false)}
+        onResultClick={handleSearchResultClick}
+        members={members.map(m => ({ id: m.id, name: m.name }))}
+      />
 
       {/* Messages */}
       {isLoading ? (
@@ -251,24 +310,37 @@ export const GroupChat = ({
               messages.map((message, index) => {
                 const isOwn = message.senderId === currentUserId;
                 const showAvatar = index === 0 || messages[index - 1].senderId !== message.senderId;
+                const readByUsers = isOwn ? getReadBy(message.id) : [];
 
                 return (
-                  <div key={message.id}>
-                    {/* Show sender name for group messages */}
+                  <div key={message.id} id={`message-${message.id}`}>
                     {!isOwn && showAvatar && (
                       <p className="text-xs text-primary font-medium px-16 mb-1">
                         {message.senderName}
                       </p>
                     )}
                     <MessageBubble
-                      message={message}
+                      message={{
+                        ...message,
+                        status: isOwn ? getReadStatus(message.id, message.senderId) : message.status,
+                      }}
                       isOwn={isOwn}
                       showAvatar={showAvatar}
                       onReply={() => setReplyTo(message)}
+                      onReact={(messageId, emoji) => toggleReaction(messageId, emoji)}
+                      onForward={() => setForwardMessage(message)}
+                      reactionSummary={getReactionSummary(message.id)}
+                      readBy={readByUsers}
+                      isHighlighted={message.id === highlightedMessageId}
                     />
                   </div>
                 );
               })
+            )}
+
+            {/* Typing indicator */}
+            {otherTypingUsers.length > 0 && (
+              <TypingIndicator users={otherTypingUsers} />
             )}
           </div>
         </ScrollArea>
@@ -277,10 +349,19 @@ export const GroupChat = ({
       {/* Input */}
       <MessageInput
         onSend={handleSend}
+        onTyping={handleTyping}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         placeholder="Type a message to the group..."
         conversationId={groupId}
+      />
+
+      {/* Forward Dialog */}
+      <ForwardMessageDialog
+        message={forwardMessage}
+        isOpen={!!forwardMessage}
+        onClose={() => setForwardMessage(null)}
+        currentUserId={currentUserId}
       />
     </div>
   );

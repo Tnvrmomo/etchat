@@ -10,14 +10,21 @@ import {
   Wifi,
   WifiOff,
   ChevronRight,
+  Edit2,
+  Check,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { ServerSettings } from '@/components/settings/ServerSettings';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
+import { ProfilePhotoUpload } from '@/components/profile/ProfilePhotoUpload';
 import { useServerStatus } from '@/hooks/useServerStatus';
 import { useUserStats } from '@/hooks/useUserStats';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ProfileViewProps {
   name: string;
@@ -28,17 +35,31 @@ interface ProfileViewProps {
 type SettingsView = 'main' | 'server' | 'notifications';
 
 export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, refreshProfile, user } = useAuth();
   const { isOnline, emergencyConfig } = useServerStatus();
   const { stats } = useUserStats();
   const [currentView, setCurrentView] = useState<SettingsView>('main');
   const [darkMode, setDarkMode] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [isEditingStatus, setIsEditingStatus] = useState(false);
+  const [editName, setEditName] = useState(profile?.display_name || name);
+  const [editUsername, setEditUsername] = useState(profile?.username || '');
+  const [editStatus, setEditStatus] = useState(profile?.status_message || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    // Check for dark mode
     const isDark = document.documentElement.classList.contains('dark');
     setDarkMode(isDark);
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      setEditName(profile.display_name || name);
+      setEditUsername(profile.username || '');
+      setEditStatus(profile.status_message || '');
+    }
+  }, [profile, name]);
 
   const toggleDarkMode = (enabled: boolean) => {
     setDarkMode(enabled);
@@ -54,6 +75,32 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
   const handleLogout = async () => {
     localStorage.removeItem('et-chat-access');
     await signOut();
+  };
+
+  const saveField = async (field: 'display_name' | 'username' | 'status_message', value: string) => {
+    if (!user) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ [field]: value })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      await refreshProfile();
+      toast.success('Profile updated');
+      
+      if (field === 'display_name') setIsEditingName(false);
+      if (field === 'username') setIsEditingUsername(false);
+      if (field === 'status_message') setIsEditingStatus(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (currentView === 'server') {
@@ -113,13 +160,160 @@ export const ProfileView = ({ name, avatar, interests }: ProfileViewProps) => {
 
       {/* Profile card */}
       <div className="bg-card rounded-organic-xl p-6 text-center shadow-soft animate-fade-in-up">
-        <div className="w-24 h-24 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-5xl mb-4">
-          {avatar}
+        <div className="flex justify-center mb-4">
+          <ProfilePhotoUpload
+            currentPhotoUrl={profile?.avatar_url || avatar}
+            displayName={profile?.display_name || name}
+            size="xl"
+          />
         </div>
-        <h1 className="font-display text-2xl font-bold text-foreground">{name}</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          {profile?.username ? `@${profile.username}` : 'eT chat member'}
-        </p>
+        
+        {/* Editable Display Name */}
+        <div className="flex items-center justify-center gap-2 mb-1">
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-48 text-center h-8"
+                placeholder="Display name"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => saveField('display_name', editName)}
+                disabled={isSaving}
+              >
+                <Check className="w-4 h-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => {
+                  setIsEditingName(false);
+                  setEditName(profile?.display_name || name);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <h1 className="font-display text-2xl font-bold text-foreground">
+                {profile?.display_name || name}
+              </h1>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => setIsEditingName(true)}
+              >
+                <Edit2 className="w-3 h-3" />
+              </Button>
+            </>
+          )}
+        </div>
+        
+        {/* Editable Username */}
+        <div className="flex items-center justify-center gap-2">
+          {isEditingUsername ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center">
+                <span className="text-muted-foreground">@</span>
+                <Input
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  className="w-32 h-7 text-sm"
+                  placeholder="username"
+                />
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => saveField('username', editUsername)}
+                disabled={isSaving}
+              >
+                <Check className="w-3 h-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => {
+                  setIsEditingUsername(false);
+                  setEditUsername(profile?.username || '');
+                }}
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-sm">
+                {profile?.username ? `@${profile.username}` : 'Set username'}
+              </p>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5"
+                onClick={() => setIsEditingUsername(true)}
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Editable Status Message */}
+        <div className="flex items-center justify-center gap-2 mt-2">
+          {isEditingStatus ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="w-48 text-center h-7 text-sm"
+                placeholder="What's on your mind?"
+              />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => saveField('status_message', editStatus)}
+                disabled={isSaving}
+              >
+                <Check className="w-3 h-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => {
+                  setIsEditingStatus(false);
+                  setEditStatus(profile?.status_message || '');
+                }}
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-xs italic">
+                {profile?.status_message || 'Set a status message'}
+              </p>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5"
+                onClick={() => setIsEditingStatus(true)}
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+              </Button>
+            </>
+          )}
+        </div>
         
         <div className="flex justify-center gap-2 mt-3">
           {isOnline ? (
