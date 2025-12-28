@@ -89,6 +89,29 @@ serve(async (req) => {
           });
         }
 
+        // Create notification for the target user
+        if (payload.targetUserId) {
+          const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
+          
+          // Get caller profile
+          const { data: callerProfile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('user_id', user.id)
+            .single();
+          
+          const callerName = callerProfile?.display_name || 'Someone';
+          
+          await serviceClient.rpc('create_notification', {
+            _user_id: payload.targetUserId,
+            _title: `Incoming ${payload.callType || 'voice'} call`,
+            _body: `${callerName} is calling you`,
+            _icon: '📞',
+            _tag: `call:${call.id}`,
+            _data: { call_id: call.id, caller_id: user.id, call_type: payload.callType },
+          });
+        }
+
         console.log('Call created:', call.id);
         return new Response(JSON.stringify({ success: true, call }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

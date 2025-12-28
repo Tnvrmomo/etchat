@@ -51,8 +51,9 @@ export const CallsView = ({ onStartCall }: CallsViewProps) => {
 
     const userName = call.caller_profile?.display_name || 'Unknown';
     const avatar = call.caller_profile?.avatar_url || undefined;
+    const targetUserId = call.other_user_id || call.caller_id;
     
-    onStartCall(call.caller_id, userName, avatar, call.call_type);
+    onStartCall(targetUserId, userName, avatar, call.call_type);
     toast.info(`Calling ${userName}...`);
   };
 
