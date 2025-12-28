@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Check, CheckCheck, Download, Play, FileText, Image as ImageIcon } from 'lucide-react';
+import { Check, CheckCheck, Download, Play, FileText, Image as ImageIcon, CornerUpRight, Smile } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { QuickReactions } from './EmojiPicker';
+import { ReactionSummary } from '@/hooks/useMessageReactions';
 
 export interface MessageAttachment {
   id: string;
@@ -39,6 +42,10 @@ interface MessageBubbleProps {
   showAvatar?: boolean;
   onReply?: (message: Message) => void;
   onReact?: (messageId: string, emoji: string) => void;
+  onForward?: (message: Message) => void;
+  reactionSummary?: ReactionSummary[];
+  readBy?: string[];
+  isHighlighted?: boolean;
 }
 
 export const MessageBubble = ({
@@ -47,7 +54,13 @@ export const MessageBubble = ({
   showAvatar = true,
   onReply,
   onReact,
+  onForward,
+  reactionSummary = [],
+  readBy = [],
+  isHighlighted = false,
 }: MessageBubbleProps) => {
+  const [showActions, setShowActions] = useState(false);
+
   const formatTime = (date: Date): string => {
     return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -151,9 +164,12 @@ export const MessageBubble = ({
   return (
     <div
       className={cn(
-        'flex gap-2 px-4 py-1 group',
-        isOwn ? 'flex-row-reverse' : 'flex-row'
+        'flex gap-2 px-4 py-1 group relative',
+        isOwn ? 'flex-row-reverse' : 'flex-row',
+        isHighlighted && 'bg-primary/10 animate-pulse'
       )}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
     >
       {/* Avatar */}
       {showAvatar && !isOwn && (
@@ -182,7 +198,7 @@ export const MessageBubble = ({
         {/* Message Bubble */}
         <div
           className={cn(
-            'shadow-soft',
+            'shadow-soft relative',
             hasOnlyAttachments ? 'p-1' : 'px-4 py-2.5',
             isOwn 
               ? 'bg-primary text-primary-foreground bubble-right' 
@@ -209,21 +225,71 @@ export const MessageBubble = ({
           </div>
         </div>
 
-        {/* Reactions */}
-        {message.reactions && message.reactions.length > 0 && (
-          <div className={cn('flex gap-0.5 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
-            {message.reactions.map((reaction, index) => (
-              <span
-                key={index}
-                className="text-sm bg-card rounded-full px-1.5 py-0.5 shadow-sm cursor-pointer hover:scale-110 transition-transform"
-                title={reaction.userName}
+        {/* Reactions Display */}
+        {reactionSummary.length > 0 && (
+          <div className={cn('flex gap-1 mt-1 flex-wrap', isOwn ? 'justify-end' : 'justify-start')}>
+            {reactionSummary.map((reaction) => (
+              <button
+                key={reaction.emoji}
+                onClick={() => onReact?.(message.id, reaction.emoji)}
+                className={cn(
+                  'flex items-center gap-1 text-sm px-2 py-0.5 rounded-full shadow-sm transition-all hover:scale-105',
+                  reaction.hasReacted
+                    ? 'bg-primary/20 border border-primary/30'
+                    : 'bg-card border border-border'
+                )}
               >
-                {reaction.emoji}
-              </span>
+                <span>{reaction.emoji}</span>
+                <span className="text-xs text-muted-foreground">{reaction.count}</span>
+              </button>
             ))}
           </div>
         )}
+
+        {/* Read by indicator for group chats */}
+        {isOwn && readBy.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Seen by {readBy.length}
+          </p>
+        )}
       </div>
+
+      {/* Action buttons */}
+      {showActions && (
+        <div
+          className={cn(
+            'absolute top-0 flex items-center gap-1',
+            isOwn ? 'left-4' : 'right-4'
+          )}
+        >
+          <QuickReactions
+            onReact={(emoji) => onReact?.(message.id, emoji)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity"
+          />
+          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onReply && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 bg-card shadow-sm border border-border"
+                onClick={() => onReply(message)}
+              >
+                <CornerUpRight className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {onForward && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 bg-card shadow-sm border border-border"
+                onClick={() => onForward(message)}
+              >
+                <CornerUpRight className="w-3.5 h-3.5 rotate-90" />
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Spacer for own messages without avatar */}
       {showAvatar && isOwn && <div className="w-8 flex-shrink-0" />}

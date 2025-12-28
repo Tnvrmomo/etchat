@@ -1,14 +1,16 @@
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Paperclip, Smile, X, Image as ImageIcon, FileText, Mic, Camera } from 'lucide-react';
+import { Send, Paperclip, X, Image as ImageIcon, FileText, Mic, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Message, MessageAttachment } from './MessageBubble';
+import { EmojiPicker } from './EmojiPicker';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface MessageInputProps {
   onSend: (content: string, attachments?: MessageAttachment[]) => void;
+  onTyping?: (isTyping: boolean) => void;
   replyTo?: Message | null;
   onCancelReply?: () => void;
   placeholder?: string;
@@ -18,6 +20,7 @@ interface MessageInputProps {
 
 export const MessageInput = ({
   onSend,
+  onTyping,
   replyTo,
   onCancelReply,
   placeholder = 'Type a message...',
@@ -32,6 +35,35 @@ export const MessageInput = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle typing indicator
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleMessageChange = (value: string) => {
+    setMessage(value);
+    
+    // Trigger typing indicator
+    if (onTyping) {
+      onTyping(true);
+      
+      // Clear previous timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Set new timeout to stop typing after 2 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        onTyping(false);
+      }, 2000);
+    }
+  };
 
   const getFileType = (mimeType: string): 'image' | 'video' | 'audio' | 'file' => {
     if (mimeType.startsWith('image/')) return 'image';
@@ -81,6 +113,14 @@ export const MessageInput = ({
 
     const content = message.trim();
     let attachments: MessageAttachment[] = [];
+
+    // Stop typing indicator
+    if (onTyping) {
+      onTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    }
 
     if (files.length > 0) {
       setIsUploading(true);
@@ -153,6 +193,23 @@ export const MessageInput = ({
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
     setFilePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEmojiSelect = (emoji: string) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newMessage = message.slice(0, start) + emoji + message.slice(end);
+      setMessage(newMessage);
+      // Set cursor position after emoji
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+        textarea.focus();
+      }, 0);
+    } else {
+      setMessage(prev => prev + emoji);
+    }
   };
 
   const getFileIcon = (file: File) => {
@@ -278,7 +335,7 @@ export const MessageInput = ({
           <Textarea
             ref={textareaRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => handleMessageChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={disabled || isUploading}
@@ -288,14 +345,9 @@ export const MessageInput = ({
               'rounded-2xl border-border focus-visible:ring-1 focus-visible:ring-primary'
             )}
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-1 bottom-1"
-            disabled={disabled}
-          >
-            <Smile className="w-5 h-5 text-muted-foreground" />
-          </Button>
+          <div className="absolute right-1 bottom-1">
+            <EmojiPicker onEmojiSelect={handleEmojiSelect} side="top" />
+          </div>
         </div>
 
         <Button

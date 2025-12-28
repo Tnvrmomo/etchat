@@ -1,13 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Phone, Video, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Phone, Video, MoreVertical, Search } from 'lucide-react';
 import { MessageBubble, Message, MessageAttachment } from './MessageBubble';
 import { MessageInput } from './MessageInput';
+import { MessageSearch } from './MessageSearch';
+import { ForwardMessageDialog } from './ForwardMessageDialog';
+import { TypingIndicator } from './TypingIndicator';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { useTypingIndicator } from '@/hooks/useTypingIndicator';
+import { useReadReceipts } from '@/hooks/useReadReceipts';
+import { useMessageReactions } from '@/hooks/useMessageReactions';
 
 interface ChatContact {
   id: string;
@@ -36,8 +42,18 @@ export const ChatView = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [isTyping, setIsTyping] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Hooks for typing, read receipts, and reactions
+  const { typingUsers, setTyping } = useTypingIndicator(contact.id);
+  const { markMultipleAsRead, getReadStatus, getReadBy } = useReadReceipts(contact.id);
+  const { toggleReaction, getReactionSummary } = useMessageReactions(contact.id);
+
+  // Filter out current user from typing users
+  const otherTypingUsers = typingUsers.filter(u => u.userId !== currentUserId);
 
   // Fetch messages
   useEffect(() => {
@@ -70,6 +86,15 @@ export const ChatView = ({
         });
 
         setMessages(formattedMessages);
+
+        // Mark messages from others as read
+        const unreadMessageIds = (data || [])
+          .filter(msg => msg.sender_id !== currentUserId)
+          .map(msg => msg.id);
+        
+        if (unreadMessageIds.length > 0) {
+          markMultipleAsRead(unreadMessageIds);
+        }
       } catch (err) {
         console.error('Error in fetchMessages:', err);
       } finally {
@@ -92,7 +117,6 @@ export const ChatView = ({
         },
         (payload) => {
           const msg = payload.new as any;
-          // Check if message already exists to prevent duplicates
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) {
               return prev;
@@ -106,6 +130,12 @@ export const ChatView = ({
               status: 'delivered',
               attachments: msg.metadata?.attachments as MessageAttachment[] | undefined,
             };
+            
+            // Mark as read if from other user
+            if (msg.sender_id !== currentUserId) {
+              markMultipleAsRead([msg.id]);
+            }
+            
             return [...prev, newMessage];
           });
         }
@@ -115,28 +145,17 @@ export const ChatView = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [contact.id, currentUserId, contact.name]);
+  }, [contact.id, currentUserId, contact.name, markMultipleAsRead]);
 
   useEffect(() => {
-    // Scroll to bottom on new messages
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Simulate typing indicator
-  useEffect(() => {
-    if (contact.status === 'typing') {
-      setIsTyping(true);
-    } else {
-      setIsTyping(false);
-    }
-  }, [contact.status]);
-
   const handleSend = async (content: string, attachments?: MessageAttachment[]) => {
     const tempId = `temp-${Date.now()}`;
     
-    // Optimistically add message
     const newMessage: Message = {
       id: tempId,
       content,
@@ -171,19 +190,16 @@ export const ChatView = ({
 
       if (error) {
         console.error('Error sending message:', error);
-        // Update status to sending (keep as sending since 'failed' is not in type)
         setMessages(prev =>
           prev.map(m => m.id === tempId ? { ...m, status: 'sending' as const } : m)
         );
         return;
       }
 
-      // Update temp message with real id
       setMessages(prev =>
         prev.map(m => m.id === tempId ? { ...m, id: data.id, status: 'sent' as const } : m)
       );
 
-      // Update conversation updated_at
       await supabase
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
@@ -194,8 +210,23 @@ export const ChatView = ({
     }
   };
 
+  const handleTyping = useCallback((isTyping: boolean) => {
+    setTyping(isTyping);
+  }, [setTyping]);
+
+  const handleSearchResultClick = (messageId: string) => {
+    setHighlightedMessageId(messageId);
+    // Find the message element and scroll to it
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Clear highlight after 2 seconds
+    setTimeout(() => setHighlightedMessageId(null), 2000);
+  };
+
   const getStatusText = (): string => {
-    if (isTyping || contact.status === 'typing') return 'typing...';
+    if (otherTypingUsers.length > 0) return 'typing...';
     if (contact.status === 'online') return 'online';
     if (contact.lastSeen) {
       return `last seen ${contact.lastSeen.toLocaleTimeString('en-US', {
@@ -252,11 +283,15 @@ export const ChatView = ({
           </h2>
           <p className={cn(
             'text-xs',
-            isTyping || contact.status === 'typing' ? 'text-primary animate-pulse' : 'text-muted-foreground'
+            otherTypingUsers.length > 0 ? 'text-primary animate-pulse' : 'text-muted-foreground'
           )}>
             {getStatusText()}
           </p>
         </div>
+
+        <Button variant="ghost" size="icon" onClick={() => setShowSearch(!showSearch)}>
+          <Search className="w-5 h-5 text-muted-foreground" />
+        </Button>
 
         <Button variant="ghost" size="icon" onClick={onVoiceCall}>
           <Phone className="w-5 h-5 text-secondary" />
@@ -270,6 +305,18 @@ export const ChatView = ({
           <MoreVertical className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Search */}
+      <MessageSearch
+        conversationId={contact.id}
+        isOpen={showSearch}
+        onClose={() => setShowSearch(false)}
+        onResultClick={handleSearchResultClick}
+        members={[
+          { id: currentUserId, name: 'You' },
+          { id: contact.userId || contact.id, name: contact.name },
+        ]}
+      />
 
       {/* Messages */}
       {isLoading ? (
@@ -287,27 +334,34 @@ export const ChatView = ({
             ) : (
               messageGroups.map((group, groupIndex) => (
                 <div key={groupIndex}>
-                  {/* Date Separator */}
                   <div className="flex items-center justify-center my-4">
                     <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
                       {group.date}
                     </span>
                   </div>
 
-                  {/* Messages for this date */}
                   <div className="space-y-1">
                     {group.messages.map((message, index) => {
                       const isOwn = message.senderId === currentUserId;
                       const showAvatar = index === 0 || group.messages[index - 1].senderId !== message.senderId;
 
                       return (
-                        <MessageBubble
-                          key={message.id}
-                          message={message}
-                          isOwn={isOwn}
-                          showAvatar={showAvatar}
-                          onReply={() => setReplyTo(message)}
-                        />
+                        <div key={message.id} id={`message-${message.id}`}>
+                          <MessageBubble
+                            message={{
+                              ...message,
+                              status: isOwn ? getReadStatus(message.id, message.senderId) : message.status,
+                            }}
+                            isOwn={isOwn}
+                            showAvatar={showAvatar}
+                            onReply={() => setReplyTo(message)}
+                            onReact={(messageId, emoji) => toggleReaction(messageId, emoji)}
+                            onForward={() => setForwardMessage(message)}
+                            reactionSummary={getReactionSummary(message.id)}
+                            readBy={isOwn ? getReadBy(message.id) : []}
+                            isHighlighted={message.id === highlightedMessageId}
+                          />
+                        </div>
                       );
                     })}
                   </div>
@@ -316,20 +370,8 @@ export const ChatView = ({
             )}
 
             {/* Typing indicator */}
-            {isTyping && (
-              <div className="flex items-center gap-2 px-4 py-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={contact.avatar} alt={contact.name} />
-                  <AvatarFallback className="text-xs bg-accent text-accent-foreground">
-                    {contact.name.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex gap-1 px-4 py-3 bg-card rounded-2xl">
-                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
+            {otherTypingUsers.length > 0 && (
+              <TypingIndicator users={otherTypingUsers} />
             )}
           </div>
         </ScrollArea>
@@ -338,9 +380,18 @@ export const ChatView = ({
       {/* Input */}
       <MessageInput
         onSend={handleSend}
+        onTyping={handleTyping}
         replyTo={replyTo}
         onCancelReply={() => setReplyTo(null)}
         conversationId={contact.id}
+      />
+
+      {/* Forward Dialog */}
+      <ForwardMessageDialog
+        message={forwardMessage}
+        isOpen={!!forwardMessage}
+        onClose={() => setForwardMessage(null)}
+        currentUserId={currentUserId}
       />
     </div>
   );
