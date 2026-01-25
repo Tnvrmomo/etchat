@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          ndk-version: 25.2.9519653
+          build-tools-version: 34.0.0
+      
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+      
+      - name: Build web assets
+        run: npm run build
+      
+      - name: Install Capacitor
+        run: npm install @capacitor/cli @capacitor/core @capacitor/android --legacy-peer-deps
+      
+      - name: Add Android platform
+        run: npx cap add android
+      
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+      
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: apk-${{ github.run_number }}
+          body: |
+            ## Android APK Build #${{ github.run_number }}
+            
+            Built from commit: ${{ github.sha }}
+            
+            ### Installation:
+            ```bash
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            ```
+            
+            ### Features:
+            - Google Meet-style calling with call codes
+            - In-call chat with emoji reactions
+            - Hand raise system
+            - Network quality monitoring
+            - Call history persistence
+            - Screen sharing & recording
+            
+            ### Requirements:
+            - Android 12 or higher (API 34 supported, Minimum API 24)
+            - 100 MB+ free storage
+            - Camera and microphone permissions
