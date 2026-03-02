@@ -10,7 +10,7 @@ export const useRingtone = (): UseRingtoneReturn => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const getAudioContext = () => {
     if (!audioContextRef.current) {

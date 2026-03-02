@@ -15,7 +15,7 @@ interface UseTypingIndicatorReturn {
 export const useTypingIndicator = (conversationId: string | null): UseTypingIndicatorReturn => {
   const { user, profile } = useAuth();
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingRef = useRef<number>(0);
 
   // Subscribe to presence for typing indicators

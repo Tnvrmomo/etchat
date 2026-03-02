@@ -34,7 +34,7 @@ export const VoiceCallScreen = ({
 
   // Call timer
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     
     if (callState === 'connected') {
       interval = setInterval(() => {
