@@ -70,7 +70,7 @@ jobs:
       
       - name: Verify APK
         run: |
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_PATH="android/app/build/outputs/apk/debug/etchat.apk"
           if [ ! -f "$APK_PATH" ]; then
             echo "❌ APK not found at $APK_PATH"
             echo "Build outputs:"
@@ -86,7 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: etchat-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/etchat.apk
           retention-days: 90
           if-no-files-found: error
       
@@ -94,7 +94,7 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v1
         with:
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android/app/build/outputs/apk/debug/etchat.apk
           tag_name: apk-build-${{ github.run_number }}
           draft: false
           prerelease: false
