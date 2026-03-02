@@ -65,8 +65,10 @@ npm run build
 
 # Step 4: Setup Capacitor and build APK
 echo -e "${YELLOW}[6/6] Building Android APK...${NC}"
-npm install @capacitor/cli @capacitor/core @capacitor/android --legacy-peer-deps > /dev/null 2>&1
+npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/push-notifications @capacitor/local-notifications --legacy-peer-deps > /dev/null 2>&1
 npx cap add android > /dev/null 2>&1 || true
+# sync to ensure newly added plugins are wired into the native project
+npx cap sync android > /dev/null 2>&1 || true
 
 cd android
 export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"

@@ -10,6 +10,19 @@ const config: CapacitorConfig = {
       launchShowDuration: 0,
     },
     Permissions: {},
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
+    LocalNotifications: {
+      iconColor: '#E2725B',
+      channels: [
+        {
+          id: 'calls',
+          name: 'Call alerts',
+          importance: 5,
+        },
+      ],
+    },
   },
   server: {
     androidScheme: 'https',

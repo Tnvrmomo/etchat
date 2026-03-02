@@ -49,7 +49,7 @@ export const useRealtimeNotifications = ({
             const callerName = (call.caller as any)?.display_name || 'Unknown';
             const avatar = (call.caller as any)?.avatar_url || '👤';
             
-            showCallNotification(
+            await showCallNotification(
               callerName,
               avatar,
               call.call_type as 'voice' | 'video',
@@ -99,7 +99,7 @@ export const useRealtimeNotifications = ({
           const avatar = sender?.avatar_url || '💬';
           const content = payload.new.content || 'Sent an attachment';
 
-          showMessageNotification(
+          await showMessageNotification(
             senderName,
             content,
             avatar,

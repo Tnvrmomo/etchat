@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BottomNav } from './BottomNav';
+import { SideNav } from './SideNav';
 import { ProfileView } from '@/components/views/ProfileView';
 import { ChatsView } from '@/components/views/ChatsView';
 import { CallsView } from '@/components/views/CallsView';
@@ -84,8 +85,8 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Incoming Call Modal */}
+    <div className="min-h-screen bg-background flex">
+      {/* incoming/overlay content goes above everything, not affected by nav */}
       {incomingCall && (
         <IncomingCallModal
           callerName={incomingCall.callerName}
@@ -135,7 +136,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       </div>
 
       {/* Header with eT chat branding */}
-      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border w-full md:ml-20 lg:ml-24">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-organic overflow-hidden shadow-soft">
@@ -151,7 +152,7 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       </header>
 
       {/* Main content area */}
-      <main className="relative z-10 pb-24">
+      <main className="relative z-10 pb-24 flex-1 md:pl-20 lg:pl-24">
         {activeNav === 'chats' && <ChatsView onStartCall={handleStartCall} />}
         {activeNav === 'calls' && <CallsView onStartCall={handleStartCall} />}
         {activeNav === 'contacts' && (
@@ -174,11 +175,18 @@ export const MainLayout = ({ userName, userAvatar, userInterests }: MainLayoutPr
       </main>
 
       {/* Navigation */}
+      <SideNav
+        active={activeNav}
+        onNavigate={setActiveNav}
+        unreadCount={unreadCount}
+        missedCalls={missedCalls}
+      />
       <BottomNav 
         active={activeNav} 
         onNavigate={setActiveNav} 
         unreadCount={unreadCount}
         missedCalls={missedCalls}
+        className="md:hidden"
       />
     </div>
   );
